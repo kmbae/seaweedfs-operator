@@ -1,0 +1,81 @@
+# SeaweedFS cluster with RDMA sidecar on Mellanox SR-IOV InfiniBand (NVIDIA Network Operator).
+#
+# Prerequisites:
+#   - NVIDIA Network Operator with NicClusterPolicy, SriovNetworkNodePolicy, SriovIBNetwork
+#   - SR-IOV IB network: sriov-ib-network (resource: nvidia.com/mlnxnics)
+#   - Built images: seaweedfs-rdma-engine, seaweedfs-rdma-sidecar
+#
+# Apply after installing the operator:
+#   kubectl apply -f config/samples/seaweed_v1_seaweed_with_rdma_mellanox.yaml
+apiVersion: seaweed.seaweedfs.com/v1
+kind: Seaweed
+metadata:
+  name: seaweed-rdma
+  namespace: default
+spec:
+  image: chrislusf/seaweedfs:latest
+  volumeServerDiskCount: 1
+  master:
+    replicas: 1
+    volumeSizeLimitMB: 1024
+  volume:
+    replicas: 1
+    requests:
+      storage: 10Gi
+    rack: rack1
+    dataCenter: dc1
+  # Multus SR-IOV IB network + RDMA sidecar containers on each volume pod.
+    annotations:
+      k8s.v1.cni.cncf.io/networks: sriov-ib-network
+    volumes:
+      - name: rdma-socket
+        emptyDir: {}
+    volumeMounts:
+      - name: rdma-socket
+        mountPath: /tmp/rdma
+    initContainers:
+      - name: rdma-engine
+        image: seaweedfs-rdma-engine:latest
+        imagePullPolicy: IfNotPresent
+        command:
+          - /usr/local/bin/rdma-engine-server
+          - --socket
+          - /tmp/rdma/rdma-engine.sock
+        securityContext:
+          capabilities:
+            add: ["IPC_LOCK"]
+        resources:
+          limits:
+            nvidia.com/mlnxnics: "1"
+            hugepages-2Mi: 1Gi
+          requests:
+            nvidia.com/mlxnics: "1"
+            hugepages-2Mi: 1Gi
+        volumeMounts:
+          - name: rdma-socket
+            mountPath: /tmp/rdma
+    sidecars:
+      - name: rdma-sidecar
+        image: seaweedfs-rdma-sidecar:latest
+        imagePullPolicy: IfNotPresent
+        args:
+          - --port=8081
+          - --engine-socket=/tmp/rdma/rdma-engine.sock
+          - --volume-server=http://127.0.0.1:8444
+          - --volume-data-dir=/data0
+          - --enable-rdma=true
+        ports:
+          - name: rdma-http
+            containerPort: 8081
+        volumeMounts:
+          - name: rdma-socket
+            mountPath: /tmp/rdma
+          - name: mount0
+            mountPath: /data0
+            readOnly: true
+  filer:
+    replicas: 1
+    config: |
+      [leveldb2]
+      enabled = true
+      dir = "/data/filerldb2"
