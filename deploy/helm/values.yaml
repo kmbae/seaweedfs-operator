@@ -4,6 +4,51 @@
 global:
   imageRegistry: "chrislusf"
 
+# -- Deploy a Seaweed custom resource (cluster) alongside the operator.
+# When enabled, `helm install` creates master/volume/filer and optional RDMA sidecars on volume pods.
+seaweed:
+  create: true
+  # -- Seaweed CR name (defaults to Helm release name)
+  name: ""
+  image: chrislusf/seaweedfs:latest
+  volumeServerDiskCount: 1
+  hostSuffix: ""
+  labels: {}
+  annotations: {}
+  master:
+    replicas: 1
+    volumeSizeLimitMB: 1024
+  volume:
+    replicas: 1
+    requests:
+      storage: 10Gi
+    rack: rack1
+    dataCenter: dc1
+    # user-defined pod annotations (merged with RDMA Multus annotation when rdma.enabled)
+    annotations: {}
+    sidecars: []
+  filer:
+    replicas: 1
+    config: |
+      [leveldb2]
+      enabled = true
+      dir = "/data/filerldb2"
+    s3:
+      enabled: false
+      configSecret: {}
+  # Mellanox SR-IOV / UCX RDMA sidecars on volume servers (see config/samples/seaweed_v1_seaweed_with_rdma_mellanox.yaml)
+  rdma:
+    enabled: true
+    registry: YOUR_REGISTRY/seaweedfs
+    sidecarTag: latest
+    engineTag: ucx
+    imagePullPolicy: Always
+    multusNetwork: sriov-ib-network
+    mlnxnicResource: nvidia.com/mlnxnics
+    hugepages2Mi: 1Gi
+    listenPort: 18515
+    volumeServerURL: http://127.0.0.1:8444
+
 # -- String to partially override common.names.fullname template (will maintain the release name)
 nameOverride: ""
 
@@ -89,7 +134,7 @@ grafanaDashboard:
 
 serviceMonitor:
   # -- Enable or disable ServiceMonitor for prometheus metrics
-  enabled: false
+  enabled: true
   # -- Specify the interval at which metrics should be scraped
   interval: 10s
   # -- Specify the timeout after which the scrape is ended

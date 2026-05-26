@@ -1,12 +1,6 @@
 # SeaweedFS cluster with RDMA sidecar on Mellanox SR-IOV InfiniBand (NVIDIA Network Operator).
 #
-# Prerequisites:
-#   - NVIDIA Network Operator with NicClusterPolicy, SriovNetworkNodePolicy, SriovIBNetwork
-#   - SR-IOV IB network: sriov-ib-network (resource: nvidia.com/mlnxnics)
-#   - Built images: seaweedfs-rdma-engine, seaweedfs-rdma-sidecar
-#
-# Apply after installing the operator:
-#   kubectl apply -f config/samples/seaweed_v1_seaweed_with_rdma_mellanox.yaml
+# Images: YOUR_REGISTRY/seaweedfs/
 apiVersion: seaweed.seaweedfs.com/v1
 kind: Seaweed
 metadata:
@@ -24,7 +18,6 @@ spec:
       storage: 10Gi
     rack: rack1
     dataCenter: dc1
-  # Multus SR-IOV IB network + RDMA sidecar containers on each volume pod.
     annotations:
       k8s.v1.cni.cncf.io/networks: sriov-ib-network
     volumes:
@@ -33,14 +26,22 @@ spec:
     volumeMounts:
       - name: rdma-socket
         mountPath: /tmp/rdma
-    initContainers:
+    sidecars:
       - name: rdma-engine
-        image: seaweedfs-rdma-engine:latest
-        imagePullPolicy: IfNotPresent
+        image: YOUR_REGISTRY/seaweedfs/rdma-engine:ucx
+        imagePullPolicy: Always
         command:
-          - /usr/local/bin/rdma-engine-server
-          - --socket
+          - ./rdma-engine-server
+          - --debug
+          - --ipc-socket
           - /tmp/rdma/rdma-engine.sock
+          - --port
+          - "18515"
+        env:
+          - name: VOLUME_SERVER_URL
+            value: "http://127.0.0.1:8444"
+          - name: RDMA_LISTEN_PORT
+            value: "18515"
         securityContext:
           capabilities:
             add: ["IPC_LOCK"]
@@ -54,10 +55,12 @@ spec:
         volumeMounts:
           - name: rdma-socket
             mountPath: /tmp/rdma
-    sidecars:
+        ports:
+          - name: rdma-net
+            containerPort: 18515
       - name: rdma-sidecar
-        image: seaweedfs-rdma-sidecar:latest
-        imagePullPolicy: IfNotPresent
+        image: YOUR_REGISTRY/seaweedfs/rdma-sidecar:latest
+        imagePullPolicy: Always
         args:
           - --port=8081
           - --engine-socket=/tmp/rdma/rdma-engine.sock
