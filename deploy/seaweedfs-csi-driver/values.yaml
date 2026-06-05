@@ -1,0 +1,28 @@
+enabled: true
+
+# Filer address for CSI node plugin (cluster DNS)
+filer:
+  address: "seaweedfs-filer.seaweedfs:8888"
+
+# Kubelet root directory (MicroK8s example below; standard k8s: /var/lib/kubelet)
+kubelet:
+  rootDir: /var/snap/microk8s/common/var/lib/kubelet
+
+storageClass:
+  create: true
+  name: seaweedfs-storage
+
+images:
+  csiDriver: chrislusf/seaweedfs-csi-driver:v1.4.13
+  mount: chrislusf/seaweedfs-mount:v1.4.13
+  weedCopy: registry-aisi.duckdns.org/seaweedfs/seaweedfs:quota-path-v1
+  nodeRegistrar: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.8.0
+  provisioner: registry.k8s.io/sig-storage/csi-provisioner:v3.5.0
+  attacher: registry.k8s.io/sig-storage/csi-attacher:v4.3.0
+  resizer: registry.k8s.io/sig-storage/csi-resizer:v1.8.0
+  livenessProbe: registry.k8s.io/sig-storage/livenessprobe:v2.10.0
+
+rdma:
+  enabled: true
+  gatewayImage: python:3.12-alpine
+  configMapName: seaweedfs-csi-rdma

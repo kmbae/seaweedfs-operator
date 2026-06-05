@@ -1,0 +1,32 @@
+{{- range $key, $node := .Values.volumeNodes }}
+{{- if $node.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ $node.pvName }}
+  labels:
+    app.kubernetes.io/name: seaweedfs
+    seaweedfs/node: {{ $node.node }}
+    seaweedfs/rack: {{ $node.rack }}
+    seaweedfs/datacenter: {{ $node.dataCenter }}
+spec:
+  capacity:
+    storage: {{ $node.capacity }}
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: {{ $.Values.storageClass.name }}
+  volumeMode: Filesystem
+  local:
+    path: {{ $node.path }}
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - {{ $node.node }}
+{{- end }}
+{{- end }}

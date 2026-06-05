@@ -1,0 +1,77 @@
+# Seaweed CR name (defaults to Helm release name)
+name: ""
+image: chrislusf/seaweedfs:latest
+volumeServerDiskCount: 1
+hostSuffix: ""
+labels: {}
+annotations: {}
+
+master:
+  replicas: 1
+  volumeSizeLimitMB: 1024
+  # 노드 1대만 쓸 때는 "000". rack 2개 이상이면 "010"
+  defaultReplication: "000"
+
+# Slurm NodeSet 과 동일 패턴: 노드 추가 시 블록 추가 후 helm upgrade
+#   helm upgrade -i -n seaweedfs seaweedfs ./seaweedfs
+volumeNodes:
+  r7615:
+    enabled: true
+    pvName: seaweedfs-volume-pv-r7615
+    node: r7615          # kubectl get nodes 의 NAME 과 동일해야 함
+    rack: rack1
+    dataCenter: dc1
+    capacity: 105Ti      # PV: /dev/sda 전체 ~109T (df Size 109T)
+    pvcRequest: 105Ti    # Volume PVC request (단일 노드면 capacity 와 동일)
+    path: /Data/seaweedfs
+  # gnode2:
+  #   enabled: false
+  #   pvName: seaweedfs-volume-pv-gnode2
+  #   node: gnode2
+  #   rack: rack1
+  #   dataCenter: dc1
+  #   capacity: 200Gi
+  #   pvcRequest: 200Gi
+  #   path: /Data/seaweedfs
+  # gnode3:
+  #   enabled: true
+  #   pvName: seaweedfs-volume-pv-gnode3
+  #   node: gnode3
+  #   rack: rack2
+  #   dataCenter: dc1
+  #   capacity: 1Ti
+  #   pvcRequest: 200Gi
+  #   path: /Data/seaweedfs
+
+storageClass:
+  name: seaweedfs
+  reclaimPolicy: Retain
+  volumeBindingMode: WaitForFirstConsumer
+
+volume:
+  storageClassName: seaweedfs
+  pvcRequest: 105Ti
+  annotations: {}
+  sidecars: []
+
+filer:
+  replicas: 1
+  config: |
+    [leveldb2]
+    enabled = true
+    dir = "/data/filerldb2"
+  s3:
+    enabled: false
+    configSecret: {}
+
+rdma:
+  enabled: true
+  registry: registry-aisi.duckdns.org/seaweedfs
+  sidecarTag: latest
+  engineTag: ucx
+  imagePullPolicy: Always
+  multusNetwork: sriov-ib-network
+  mlnxnicResource: nvidia.com/mlnxnics
+  hugepages2Mi: 1Gi
+  listenPort: 18515
+  volumeServerURL: http://127.0.0.1:8444

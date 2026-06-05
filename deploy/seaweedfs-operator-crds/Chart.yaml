@@ -1,0 +1,9 @@
+apiVersion: v2
+name: seaweedfs-operator-crds
+description: SeaweedFS Operator CRDs
+type: application
+version: 0.1.23
+appVersion: "1.0.20"
+maintainers:
+  - name: chrislusf
+    url: https://github.com/chrislusf

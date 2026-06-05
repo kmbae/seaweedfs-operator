@@ -11,6 +11,34 @@ import (
 	seaweedv1 "github.com/seaweedfs/seaweedfs-operator/api/v1"
 )
 
+const rdmaSidecarHTTPPort = 8081
+
+func volumeHasRDMASidecar(m *seaweedv1.Seaweed) bool {
+	for _, c := range m.Spec.Volume.Sidecars {
+		if c.Name == "rdma-sidecar" {
+			return true
+		}
+	}
+	return false
+}
+
+func appendRDMAServicePort(ports []corev1.ServicePort, m *seaweedv1.Seaweed) []corev1.ServicePort {
+	if !volumeHasRDMASidecar(m) {
+		return ports
+	}
+	for _, p := range ports {
+		if p.Name == "rdma-http" {
+			return ports
+		}
+	}
+	return append(ports, corev1.ServicePort{
+		Name:       "rdma-http",
+		Protocol:   corev1.ProtocolTCP,
+		Port:       rdmaSidecarHTTPPort,
+		TargetPort: intstr.FromInt(rdmaSidecarHTTPPort),
+	})
+}
+
 func (r *SeaweedReconciler) createVolumeServerPeerService(m *seaweedv1.Seaweed) *corev1.Service {
 	labels := labelsForVolumeServer(m.Name)
 	ports := []corev1.ServicePort{
@@ -35,6 +63,7 @@ func (r *SeaweedReconciler) createVolumeServerPeerService(m *seaweedv1.Seaweed) 
 			TargetPort: intstr.FromInt(int(*m.Spec.Volume.MetricsPort)),
 		})
 	}
+	ports = appendRDMAServicePort(ports, m)
 
 	dep := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{

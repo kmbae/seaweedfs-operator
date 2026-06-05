@@ -1,0 +1,103 @@
+{{- $enabledNodes := dict }}
+{{- range $key, $node := .Values.volumeNodes }}
+{{- if $node.enabled }}
+{{- $_ := set $enabledNodes $key $node }}
+{{- end }}
+{{- end }}
+{{- $useTopology := gt (len $enabledNodes) 0 }}
+apiVersion: seaweed.seaweedfs.com/v1
+kind: Seaweed
+metadata:
+  name: {{ .Values.name | default .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "seaweedfs.labels" . | nindent 4 }}
+    {{- with .Values.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  image: {{ .Values.image }}
+  volumeServerDiskCount: {{ .Values.volumeServerDiskCount }}
+  {{- with .Values.hostSuffix }}
+  hostSuffix: {{ . | quote }}
+  {{- end }}
+  master:
+    replicas: {{ .Values.master.replicas }}
+    volumeSizeLimitMB: {{ .Values.master.volumeSizeLimitMB }}
+    {{- with .Values.master.defaultReplication }}
+    defaultReplication: {{ . | quote }}
+    {{- end }}
+  volume:
+    {{- if $useTopology }}
+    replicas: 0
+    {{- else }}
+    replicas: {{ .Values.volume.replicas | default 1 }}
+    {{- end }}
+    {{- with .Values.volume.storageClassName }}
+    storageClassName: {{ . | quote }}
+    {{- end }}
+    requests:
+      storage: {{ .Values.volume.pvcRequest | quote }}
+    {{- if not $useTopology }}
+    {{- with .Values.volume.rack }}
+    rack: {{ . | quote }}
+    {{- end }}
+    {{- with .Values.volume.dataCenter }}
+    dataCenter: {{ . | quote }}
+    {{- end }}
+    {{- if or .Values.volume.annotations .Values.rdma.enabled }}
+    annotations:
+      {{- with .Values.volume.annotations }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
+      {{- if .Values.rdma.enabled }}
+      k8s.v1.cni.cncf.io/networks: {{ .Values.rdma.multusNetwork | quote }}
+      {{- end }}
+    {{- end }}
+    {{- if .Values.rdma.enabled }}
+    volumes:
+      - name: rdma-socket
+        emptyDir: {}
+    volumeMounts:
+      - name: rdma-socket
+        mountPath: /tmp/rdma
+    sidecars:
+      {{- include "seaweedfs.rdmaSidecarsOnly" . | nindent 6 }}
+    {{- else if .Values.volume.sidecars }}
+    sidecars:
+      {{- toYaml .Values.volume.sidecars | nindent 6 }}
+    {{- end }}
+    {{- end }}
+  {{- if $useTopology }}
+  volumeTopology:
+    {{- range $key, $node := $enabledNodes }}
+    {{ $key }}:
+      replicas: 1
+      rack: {{ $node.rack | quote }}
+      dataCenter: {{ $node.dataCenter | quote }}
+      storageClassName: {{ $.Values.volume.storageClassName | quote }}
+      requests:
+        storage: {{ default $.Values.volume.pvcRequest $node.pvcRequest | quote }}
+      nodeSelector:
+        kubernetes.io/hostname: {{ $node.node | quote }}
+      {{- include "seaweedfs.rdmaVolumeGroup" $ | nindent 6 }}
+    {{- end }}
+  {{- end }}
+  filer:
+    replicas: {{ .Values.filer.replicas }}
+    {{- if .Values.filer.s3.enabled }}
+    s3:
+      enabled: true
+      {{- with .Values.filer.s3.configSecret }}
+      configSecret:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- end }}
+    {{- with .Values.filer.config }}
+    config: |
+{{ . | nindent 6 }}
+    {{- end }}

@@ -1,0 +1,9 @@
+apiVersion: v2
+name: seaweedfs-csi-driver
+description: SeaweedFS CSI driver with optional mount RDMA integration
+type: application
+version: 0.1.23
+appVersion: "1.4.13"
+maintainers:
+  - name: chrislusf
+    url: https://github.com/chrislusf

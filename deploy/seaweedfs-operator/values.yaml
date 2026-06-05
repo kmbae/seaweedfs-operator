@@ -1,0 +1,90 @@
+global:
+  imageRegistry: "chrislusf"
+
+nameOverride: ""
+fullnameOverride: ""
+commonAnnotations: {}
+commonLabels: {}
+
+rbac:
+  serviceAccount:
+    create: true
+    annotations: {}
+    name: ""
+    automount: true
+
+image:
+  registry: chrislusf
+  repository: seaweedfs-operator
+  tag: ""
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+bucketUsage:
+  refreshInterval: ""
+
+port:
+  name: http
+  number: 8080
+
+service:
+  portName: http
+  port: 8080
+
+grafanaDashboard:
+  enabled: true
+
+serviceMonitor:
+  enabled: true
+  interval: 10s
+  scrapeTimeout: 10s
+  honorLabels: true
+  additionalLabels: {}
+
+webhook:
+  enabled: true
+  initContainer:
+    image: curlimages/curl:8.8.0
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    fsGroup: 65532
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+      - ALL
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+  certgen:
+    registry: registry.k8s.io
+    repository: ingress-nginx/kube-webhook-certgen
+    tag: v20231011-8b53cabe0
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 500Mi
+  requests:
+    cpu: 100m
+    memory: 50Mi
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  fsGroup: 65532
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
