@@ -9,20 +9,20 @@ annotations: {}
 master:
   replicas: 1
   volumeSizeLimitMB: 1024
-  # 노드 1대만 쓸 때는 "000". rack 2개 이상이면 "010"
+  # Use "000" for a single node; use "010" when you have two or more racks
   defaultReplication: "000"
 
-# Slurm NodeSet 과 동일 패턴: 노드 추가 시 블록 추가 후 helm upgrade
+# Add a block per node, then helm upgrade
 #   helm upgrade -i -n seaweedfs seaweedfs ./seaweedfs
 volumeNodes:
   r7615:
     enabled: true
     pvName: seaweedfs-volume-pv-r7615
-    node: r7615          # kubectl get nodes 의 NAME 과 동일해야 함
+    node: r7615          # must match NAME from kubectl get nodes
     rack: rack1
     dataCenter: dc1
-    capacity: 105Ti      # PV: /dev/sda 전체 ~109T (df Size 109T)
-    pvcRequest: 105Ti    # Volume PVC request (단일 노드면 capacity 와 동일)
+    capacity: 105Ti      # PV: full /dev/sda ~109T (df Size 109T)
+    pvcRequest: 105Ti    # Volume PVC request (same as capacity on a single node)
     path: /Data/seaweedfs
   # gnode2:
   #   enabled: false
@@ -66,7 +66,7 @@ filer:
 
 rdma:
   enabled: true
-  registry: registry-aisi.duckdns.org/seaweedfs
+  registry: kmbae27
   sidecarTag: latest
   engineTag: ucx
   imagePullPolicy: Always
