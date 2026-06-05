@@ -15,7 +15,7 @@ storageClass:
 images:
   csiDriver: chrislusf/seaweedfs-csi-driver:v1.4.13
   mount: chrislusf/seaweedfs-mount:v1.4.13
-  weedCopy: registry-aisi.duckdns.org/seaweedfs/seaweedfs:quota-path-v1
+  weedCopy: kmbae27/seaweedfs:latest
   nodeRegistrar: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.8.0
   provisioner: registry.k8s.io/sig-storage/csi-provisioner:v3.5.0
   attacher: registry.k8s.io/sig-storage/csi-attacher:v4.3.0
