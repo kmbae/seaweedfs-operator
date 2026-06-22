@@ -12,9 +12,17 @@ storageClass:
   create: true
   name: seaweedfs-storage
 
+# Extra flags appended to every `weed mount` invocation (via weed-rdma-wrapper).
+# Match pjdfstest / fuse_integration defaults for POSIX directory nlink.
+mount:
+  extraArgs:
+    - "-posix.dirNLink=true"
+    - "-dlm=true"
+
 images:
-  csiDriver: chrislusf/seaweedfs-csi-driver:v1.4.13
-  mount: chrislusf/seaweedfs-mount:v1.4.13
+  # v1.4.20+ applies PVC capacity as collectionQuotaMB at mount time (PR #279).
+  csiDriver: chrislusf/seaweedfs-csi-driver:v1.4.20
+  mount: chrislusf/seaweedfs-mount:v1.4.20
   weedCopy: kmbae27/seaweedfs:latest
   nodeRegistrar: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.8.0
   provisioner: registry.k8s.io/sig-storage/csi-provisioner:v3.5.0

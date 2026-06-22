@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"os"
+	"strings"
 	"time"
 
 	monitorv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
@@ -30,6 +31,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -76,6 +78,17 @@ func main() {
 		"Cadence for refreshing status.usage on Bucket resources. "+
 			"Set to 0 to disable. Defaults to 5m. Each tick issues one collection.list "+
 			"call per Seaweed cluster that owns Buckets, then patches per-bucket status.")
+	var pvcReplicationEnabled bool
+	var pvcReplicationClusterNS, pvcReplicationClusterName string
+	var pvcReplicationStorageClasses string
+	flag.BoolVar(&pvcReplicationEnabled, "pvc-replication-enabled", true,
+		"Reconcile seaweed.seaweedfs.com/replication on CSI PVCs via fs.configure.")
+	flag.StringVar(&pvcReplicationClusterNS, "pvc-replication-cluster-namespace", "seaweedfs",
+		"Default namespace of the Seaweed CR for PVC replication.")
+	flag.StringVar(&pvcReplicationClusterName, "pvc-replication-cluster-name", "seaweedfs",
+		"Default name of the Seaweed CR for PVC replication.")
+	flag.StringVar(&pvcReplicationStorageClasses, "pvc-replication-storage-classes", "seaweedfs-storage",
+		"Comma-separated StorageClass names eligible for PVC replication.")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -151,6 +164,24 @@ func main() {
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Bucket")
 		os.Exit(1)
+	}
+
+	if pvcReplicationEnabled {
+		storageClasses := strings.Split(pvcReplicationStorageClasses, ",")
+		if err = (&controller.PvcReplicationReconciler{
+			Client:   mgr.GetClient(),
+			Log:      ctrl.Log.WithName("controller").WithName("PvcReplication"),
+			Scheme:   mgr.GetScheme(),
+			Recorder: mgr.GetEventRecorderFor("pvc-replication-controller"),
+			DefaultClusterRef: types.NamespacedName{
+				Namespace: pvcReplicationClusterNS,
+				Name:      pvcReplicationClusterName,
+			},
+			StorageClasses: storageClasses,
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "PvcReplication")
+			os.Exit(1)
+		}
 	}
 
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {

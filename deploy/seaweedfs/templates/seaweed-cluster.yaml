@@ -31,6 +31,9 @@ spec:
     {{- with .Values.master.defaultReplication }}
     defaultReplication: {{ . | quote }}
     {{- end }}
+    {{- with .Values.master.metricsPort }}
+    metricsPort: {{ . }}
+    {{- end }}
   volume:
     {{- if $useTopology }}
     replicas: 0
@@ -42,6 +45,9 @@ spec:
     {{- end }}
     requests:
       storage: {{ .Values.volume.pvcRequest | quote }}
+    {{- with .Values.volume.metricsPort }}
+    metricsPort: {{ . }}
+    {{- end }}
     {{- if not $useTopology }}
     {{- with .Values.volume.rack }}
     rack: {{ . | quote }}
@@ -80,6 +86,11 @@ spec:
       rack: {{ $node.rack | quote }}
       dataCenter: {{ $node.dataCenter | quote }}
       storageClassName: {{ $.Values.volume.storageClassName | quote }}
+      {{- with $node.metricsPort }}
+      metricsPort: {{ . }}
+      {{- else with $.Values.volume.metricsPort }}
+      metricsPort: {{ . }}
+      {{- end }}
       requests:
         storage: {{ default $.Values.volume.pvcRequest $node.pvcRequest | quote }}
       nodeSelector:
@@ -89,15 +100,22 @@ spec:
   {{- end }}
   filer:
     replicas: {{ .Values.filer.replicas }}
+    {{- with .Values.filer.metricsPort }}
+    metricsPort: {{ . }}
+    {{- end }}
     {{- if .Values.filer.s3.enabled }}
     s3:
       enabled: true
-      {{- with .Values.filer.s3.configSecret }}
       configSecret:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+        name: {{ include "seaweedfs.s3SecretName" . | quote }}
+        key: {{ .Values.filer.s3.configSecret.key | default "s3.json" | quote }}
     {{- end }}
     {{- with .Values.filer.config }}
     config: |
 {{ . | nindent 6 }}
     {{- end }}
+  {{- if .Values.admin.enabled }}
+  admin:
+    credentialsSecret:
+      name: {{ include "seaweedfs.adminSecretName" . | quote }}
+  {{- end }}

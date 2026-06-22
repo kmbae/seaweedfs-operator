@@ -317,6 +317,11 @@ adopts or modifies a bucket created by the COSI driver — collisions are
 surfaced as `BucketAlreadyExists` in `status` rather than silently
 overwriting.
 
+## Operations Guide
+
+For production deployment, see [INSTALL.md](./INSTALL.md).
+
+
 ## Maintenance and Uninstallation
 
 - TBD

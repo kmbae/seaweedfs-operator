@@ -20,9 +20,69 @@ data:
       done
     fi
 
-    if [ "${RDMA_ENABLED:-false}" != "true" ]; then
-      exec "${REAL_WEED}" "$@"
-    fi
+    append_mount_extra_args() {
+      if [ -n "${WEED_MOUNT_EXTRA_ARGS:-}" ]; then
+        # shellcheck disable=SC2086
+        set -- "$@" ${WEED_MOUNT_EXTRA_ARGS}
+      fi
+    }
+
+    storage_to_quota_mb() {
+      s="$1"
+      num="${s%%[!0-9]*}"
+      unit="${s#"$num"}"
+      case "$unit" in
+        Ei) echo $((num * 1024 * 1024 * 1024)) ;;
+        Pi) echo $((num * 1024 * 1024)) ;;
+        Ti) echo $((num * 1024)) ;;
+        Gi) echo $((num * 1024)) ;;
+        Mi) echo "$num" ;;
+        Ki) echo $(( (num + 1023) / 1024 )) ;;
+        "") echo $(( (num + 1048575) / 1048576 )) ;;
+        *) echo 0 ;;
+      esac
+    }
+
+    k8s_get_pv_storage() {
+      pv_name="$1"
+      token=""
+      host=""
+      port=""
+      token=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token 2>/dev/null) || return 1
+      host="${KUBERNETES_SERVICE_HOST:-}"
+      port="${KUBERNETES_SERVICE_PORT:-443}"
+      [ -n "$host" ] || return 1
+      wget -qO- --header "Authorization: Bearer ${token}" --no-check-certificate \
+        "https://${host}:${port}/api/v1/persistentvolumes/${pv_name}" 2>/dev/null \
+        | sed -n 's/.*"storage"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1
+    }
+
+    inject_collection_quota_mb_if_needed() {
+      collection=""
+      filer_path=""
+      quota_set=false
+      storage=""
+      quota_mb=""
+      for arg in "$@"; do
+        case "$arg" in
+          -collection=*) collection="${arg#-collection=}" ;;
+          -filer.path=*) filer_path="${arg#-filer.path=}" ;;
+          -collectionQuotaMB=*) quota_set=true ;;
+        esac
+      done
+      if [ "$quota_set" = true ]; then
+        return 0
+      fi
+      if [ -z "$collection" ] && [ -n "$filer_path" ]; then
+        collection="${filer_path##*/}"
+      fi
+      [ -n "$collection" ] || return 0
+      storage=$(k8s_get_pv_storage "$collection") || return 0
+      [ -n "$storage" ] || return 0
+      quota_mb=$(storage_to_quota_mb "$storage")
+      [ "$quota_mb" -gt 0 ] 2>/dev/null || return 0
+      set -- "$@" "-collectionQuotaMB=${quota_mb}"
+    }
 
     has_mount=false
     for arg in "$@"; do
@@ -31,6 +91,16 @@ data:
         break
       fi
     done
+
+    if [ "${has_mount}" = "true" ]; then
+      append_mount_extra_args
+      inject_collection_quota_mb_if_needed
+    fi
+
+    if [ "${RDMA_ENABLED:-false}" != "true" ]; then
+      exec "${REAL_WEED}" "$@"
+    fi
+
     if [ "${has_mount}" != "true" ]; then
       exec "${REAL_WEED}" "$@"
     fi

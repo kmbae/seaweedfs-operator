@@ -100,7 +100,7 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: seaweedfs-controller-sa
-    namespace: default
+    namespace: {{ .Release.Namespace }}
 roleRef:
   kind: ClusterRole
   name: seaweedfs-provisioner-role
@@ -113,7 +113,7 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: seaweedfs-controller-sa
-    namespace: default
+    namespace: {{ .Release.Namespace }}
 roleRef:
   kind: ClusterRole
   name: seaweedfs-attacher-role
@@ -126,7 +126,7 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: seaweedfs-controller-sa
-    namespace: default
+    namespace: {{ .Release.Namespace }}
 roleRef:
   kind: ClusterRole
   name: seaweedfs-driver-registrar-controller-role
@@ -139,7 +139,7 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: seaweedfs-node-sa
-    namespace: default
+    namespace: {{ .Release.Namespace }}
 roleRef:
   kind: ClusterRole
   name: seaweedfs-driver-registrar-node-role
@@ -149,7 +149,7 @@ kind: Role
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: seaweedfs-leader-election-controller-role
-  namespace: default
+  namespace: {{ .Release.Namespace }}
 rules:
   - apiGroups: ["coordination.k8s.io"]
     resources: ["leases"]
@@ -159,10 +159,10 @@ kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: seaweedfs-leader-election-controller-binding
-  namespace: default
+  namespace: {{ .Release.Namespace }}
 subjects:
   - kind: ServiceAccount
-    namespace: default
+    namespace: {{ .Release.Namespace }}
     name: seaweedfs-controller-sa
 roleRef:
   kind: Role
@@ -225,6 +225,10 @@ spec:
               value: "false"
             - name: WEED_REAL_BINARY
               value: "/weed-bin/weed"
+            {{- if .Values.mount.extraArgs }}
+            - name: WEED_MOUNT_EXTRA_ARGS
+              value: {{ join " " .Values.mount.extraArgs | quote }}
+            {{- end }}
           volumeMounts:
             - name: weed-bin
               mountPath: /weed-bin
@@ -527,7 +531,7 @@ spec:
           args:
             - --csi-address=$(ADDRESS)
             - --leader-election
-            - --leader-election-namespace=default
+            - --leader-election-namespace={{ .Release.Namespace }}
             - --http-endpoint=:9809
             #- --v=9
           env:
@@ -556,7 +560,7 @@ spec:
           args:
             - --csi-address=$(ADDRESS)
             - --leader-election
-            - --leader-election-namespace=default
+            - --leader-election-namespace={{ .Release.Namespace }}
             - --http-endpoint=:9810
             #- --v=5
           env:
@@ -584,7 +588,7 @@ spec:
           args:
             - --csi-address=$(ADDRESS)
             - --leader-election
-            - --leader-election-namespace=default
+            - --leader-election-namespace={{ .Release.Namespace }}
             - --http-endpoint=:9811
           env:
             - name: ADDRESS

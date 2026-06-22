@@ -65,6 +65,16 @@ helm upgrade -i -n seaweedfs seaweedfs ./seaweedfs
 
 A single `helm upgrade` applies PV + volumeTopology + RDMA sidecar together.
 
+### PVC (Helm 이후 수동 apply)
+
+StorageClass·PV는 Helm chart에 포함됩니다. Volume **PVC** 만 별도로 올릴 때:
+
+```bash
+kubectl apply -f examples/storage/volume-server-persistentvolumeclaim.yaml
+```
+
+CSI 애플리케이션 PVC는 `examples/storage/csi-persistentvolumeclaim.yaml`. `examples/storage/README.md` 참고.
+
 ### Non-MicroK8s Kubernetes
 
 ```bash

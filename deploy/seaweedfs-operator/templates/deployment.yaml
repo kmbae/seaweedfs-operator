@@ -54,6 +54,12 @@ spec:
         - --bucket-usage-refresh-interval={{ .Values.bucketUsage.refreshInterval }}
         {{- end }}
         {{- end }}
+        {{- if .Values.pvcReplication.enabled }}
+        - --pvc-replication-enabled=true
+        - --pvc-replication-cluster-namespace={{ .Values.pvcReplication.clusterRef.namespace }}
+        - --pvc-replication-cluster-name={{ .Values.pvcReplication.clusterRef.name }}
+        - --pvc-replication-storage-classes={{ join "," .Values.pvcReplication.storageClasses }}
+        {{- end }}
         env:
         {{- if eq .Values.webhook.enabled false }}
         - name: ENABLE_WEBHOOKS

@@ -5,7 +5,7 @@ apiVersion: seaweed.seaweedfs.com/v1
 kind: Seaweed
 metadata:
   name: seaweed-rdma
-  namespace: default
+  namespace: seaweedfs-operator
 spec:
   image: chrislusf/seaweedfs:latest
   volumeServerDiskCount: 1
@@ -28,7 +28,7 @@ spec:
         mountPath: /tmp/rdma
     sidecars:
       - name: rdma-engine
-        image: YOUR_REGISTRY/seaweedfs/rdma-engine:ucx
+        image: registry-aisi.duckdns.org/seaweedfs/rdma-engine:ucx
         imagePullPolicy: Always
         command:
           - ./rdma-engine-server
@@ -59,7 +59,7 @@ spec:
           - name: rdma-net
             containerPort: 18515
       - name: rdma-sidecar
-        image: YOUR_REGISTRY/seaweedfs/rdma-sidecar:latest
+        image: registry-aisi.duckdns.org/seaweedfs/rdma-sidecar:latest
         imagePullPolicy: Always
         args:
           - --port=8081

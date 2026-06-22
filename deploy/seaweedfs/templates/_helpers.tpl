@@ -25,3 +25,24 @@ app.kubernetes.io/name: {{ include "seaweedfs.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
+
+{{/*
+Resolve admin credentials secret name.
+*/}}
+{{- define "seaweedfs.adminSecretName" -}}
+{{- .Values.admin.credentialsSecret.name | default (printf "%s-admin-credentials" (.Values.name | default .Release.Name)) -}}
+{{- end }}
+
+{{/*
+Resolve S3 config secret name.
+*/}}
+{{- define "seaweedfs.s3SecretName" -}}
+{{- .Values.filer.s3.configSecret.name | default (printf "%s-s3-config" (.Values.name | default .Release.Name)) -}}
+{{- end }}
+
+{{/*
+Seaweed CR name used for Service names (e.g. seaweedfs-admin).
+*/}}
+{{- define "seaweedfs.clusterName" -}}
+{{- .Values.name | default .Release.Name -}}
+{{- end }}

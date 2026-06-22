@@ -19,9 +19,12 @@ seaweed:
     replicas: 1
     volumeSizeLimitMB: 1024
   volume:
-    replicas: 1
+    replicas: 2
+    storageClassName: seaweedfs-local
+    # PVC request = smallest NAS capacity (pv-*.yaml capacity is per-node actual size)
+    # Two racks (gnode1/rack1, gnode2/rack2) + replication 010: config/samples/seaweed_v1_seaweed_two_racks_gnode.yaml
     requests:
-      storage: 10Gi
+      storage: 200Gi
     rack: rack1
     dataCenter: dc1
     # user-defined pod annotations (merged with RDMA Multus annotation when rdma.enabled)
@@ -39,7 +42,7 @@ seaweed:
   # Mellanox SR-IOV / UCX RDMA sidecars on volume servers (see config/samples/seaweed_v1_seaweed_with_rdma_mellanox.yaml)
   rdma:
     enabled: true
-    registry: YOUR_REGISTRY/seaweedfs
+    registry: registry-aisi.duckdns.org/seaweedfs
     sidecarTag: latest
     engineTag: ucx
     imagePullPolicy: Always

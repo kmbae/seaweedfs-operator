@@ -11,6 +11,7 @@ master:
   volumeSizeLimitMB: 1024
   # Use "000" for a single node; use "010" when you have two or more racks
   defaultReplication: "000"
+  metricsPort: 9327
 
 # Add a block per node, then helm upgrade
 #   helm upgrade -i -n seaweedfs seaweedfs ./seaweedfs
@@ -51,21 +52,43 @@ storageClass:
 volume:
   storageClassName: seaweedfs
   pvcRequest: 105Ti
+  metricsPort: 9327
   annotations: {}
   sidecars: []
 
 filer:
   replicas: 1
+  metricsPort: 9327
   config: |
     [leveldb2]
     enabled = true
     dir = "/data/filerldb2"
   s3:
-    enabled: false
-    configSecret: {}
+    enabled: true
+    configSecret:
+      create: true
+      name: ""
+      key: s3.json
+      # Leave empty to auto-generate on first install.
+      accessKey: ""
+      secretKey: ""
+
+# SeaweedFS Admin UI (weed admin) — cluster management web UI on port 23646.
+# When create: true (default), Helm auto-creates the credentials Secret on first
+# install and prints the password after helm upgrade / install.sh.
+# S3 API is embedded in the filer (port 8333); configSecret.create auto-generates
+# access/secret keys in Secret {release}-s3-config.
+admin:
+  enabled: true
+  credentialsSecret:
+    create: true
+    name: seaweedfs-admin-credentials
+    adminUser: admin
+    # Leave empty to auto-generate a random password on first install.
+    adminPassword: ""
 
 rdma:
-  enabled: true
+  enabled: false
   registry: kmbae27
   sidecarTag: latest
   engineTag: ucx

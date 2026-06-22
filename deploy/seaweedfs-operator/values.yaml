@@ -14,15 +14,23 @@ rbac:
     automount: true
 
 image:
-  registry: chrislusf
+  registry: kmbae27
   repository: seaweedfs-operator
-  tag: ""
-  pullPolicy: IfNotPresent
+  tag: "latest"
+  pullPolicy: Always
 
 replicaCount: 1
 
 bucketUsage:
   refreshInterval: ""
+
+pvcReplication:
+  enabled: true
+  clusterRef:
+    namespace: seaweedfs
+    name: seaweedfs
+  storageClasses:
+    - seaweedfs-storage
 
 port:
   name: http
