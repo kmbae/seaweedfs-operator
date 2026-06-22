@@ -1,0 +1,55 @@
+SeaweedFS cluster "{{ include "seaweedfs.clusterName" . }}" installed in namespace {{ .Release.Namespace }}.
+
+Verify:
+  kubectl get pods -n {{ .Release.Namespace }}
+  kubectl get seaweed -n {{ .Release.Namespace }}
+
+{{- if .Values.admin.enabled }}
+
+Admin UI (weed admin):
+  kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "seaweedfs.clusterName" . }}-admin 23646:23646
+  Open http://localhost:23646
+
+{{- $secretName := include "seaweedfs.adminSecretName" . }}
+{{- $adminSecret := lookup "v1" "Secret" .Release.Namespace $secretName }}
+{{- if $adminSecret }}
+Admin credentials (from Secret {{ $secretName }}):
+  User:     {{ index $adminSecret.data "adminUser" | b64dec }}
+  Password: {{ index $adminSecret.data "adminPassword" | b64dec }}
+{{- if index $adminSecret.metadata.annotations "seaweed.seaweedfs.com/auto-generated" }}
+  (auto-generated on first install — change with: kubectl edit secret {{ $secretName }} -n {{ .Release.Namespace }}, then restart admin pod)
+{{- end }}
+{{- else if .Values.admin.credentialsSecret.create }}
+Admin credentials Secret "{{ $secretName }}" was not found yet. Re-run:
+  kubectl get secret {{ $secretName }} -n {{ .Release.Namespace }} -o jsonpath='{.data.adminUser}{"\n"}{.data.adminPassword}{"\n"}' | while read u; read p; do echo "User: $u"; echo "Password: $(echo "$p" | base64 -d)"; done
+{{- else }}
+Create Secret "{{ $secretName }}" before the admin pod can authenticate (see deploy/examples/admin/).
+{{- end }}
+{{- end }}
+
+{{- if .Values.filer.s3.enabled }}
+
+S3 API (embedded in filer):
+  kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "seaweedfs.clusterName" . }}-filer 8333:8333
+  Endpoint: http://localhost:8333
+
+{{- $s3SecretName := include "seaweedfs.s3SecretName" . }}
+{{- $s3Secret := lookup "v1" "Secret" .Release.Namespace $s3SecretName }}
+{{- if $s3Secret }}
+S3 credentials (from Secret {{ $s3SecretName }}):
+  Access key: {{ index $s3Secret.data "accessKey" | b64dec }}
+  Secret key: {{ index $s3Secret.data "secretKey" | b64dec }}
+{{- if index $s3Secret.metadata.annotations "seaweed.seaweedfs.com/auto-generated" }}
+  (auto-generated on first install — change with: kubectl edit secret {{ $s3SecretName }} -n {{ .Release.Namespace }}, then restart filer pod)
+{{- end }}
+{{- else if .Values.filer.s3.configSecret.create }}
+S3 credentials Secret "{{ $s3SecretName }}" was not found yet. Re-run:
+  kubectl get secret {{ $s3SecretName }} -n {{ .Release.Namespace }} -o jsonpath='Access key: {.data.accessKey}{"\n"}Secret key: {.data.secretKey}{"\n"}' | while read label val; do echo "$label $(echo "$val" | base64 -d)"; done
+{{- else }}
+Create Secret "{{ $s3SecretName }}" before S3 auth works (see deploy/examples/s3/).
+{{- end }}
+{{- end }}
+
+Master UI:
+  kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "seaweedfs.clusterName" . }}-master 9333:9333
+  Open http://localhost:9333
