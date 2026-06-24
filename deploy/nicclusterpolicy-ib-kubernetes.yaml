@@ -1,0 +1,38 @@
+apiVersion: mellanox.com/v1alpha1
+kind: NicClusterPolicy
+metadata:
+  name: nic-cluster-policy
+spec:
+  ofedDriver:
+    repository: nvcr.io/nvidia/mellanox
+    image: doca-driver
+    version: doca3.3.0-26.01-1.0.0.0-0
+    imagePullSecrets: []
+    forcePrecompiled: false
+    terminationGracePeriodSeconds: 300
+  secondaryNetwork:
+    cniPlugins:
+      repository: nvcr.io/nvidia/mellanox
+      image: plugins
+      version: network-operator-v26.1.0
+      imagePullSecrets: []
+    multus:
+      repository: nvcr.io/nvidia/mellanox
+      image: multus-cni
+      version: network-operator-v26.1.0
+      imagePullSecrets: []
+  nvIpam:
+    repository: nvcr.io/nvidia/mellanox
+    image: nvidia-k8s-ipam
+    version: network-operator-v26.1.0
+    imagePullSecrets: []
+    enableWebhook: false
+  ibKubernetes:
+    repository: nvcr.io/nvidia/mellanox
+    image: ib-kubernetes
+    version: network-operator-v26.1.0
+    imagePullSecrets: []
+    pKeyGUIDPoolRangeStart: "02:00:00:00:00:00:10:00"
+    pKeyGUIDPoolRangeEnd: "02:00:00:00:00:00:ff:ff"
+    periodicUpdateSeconds: 5
+    ufmSecret: ""
