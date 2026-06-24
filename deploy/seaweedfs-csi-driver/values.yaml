@@ -51,11 +51,9 @@ rdma:
       requests:
         cpu: 100m
         memory: 256Mi
-        hugepages-2Mi: 1Gi
         nvidia.com/mlnxnics: 1
       limits:
         memory: 1Gi
-        hugepages-2Mi: 1Gi
         nvidia.com/mlnxnics: 1
   workerSidecar:
     enabled: false
