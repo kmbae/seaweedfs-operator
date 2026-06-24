@@ -14,7 +14,6 @@ spec:
   mtu: 1500
   nicSelector:
     rootDevices:
-      - "0000:f5:00.0"
       - "0000:c1:00.0"
       - "0000:01:00.1"
   nodeSelector:
