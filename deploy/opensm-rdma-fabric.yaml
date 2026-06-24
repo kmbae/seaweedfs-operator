@@ -21,11 +21,15 @@ spec:
         kubernetes.io/hostname: r7615
       containers:
         - name: opensm
-          image: kmbae27/opensm:rdma-20260624
+          image: kmbae27/opensm:rdma-20260624-smguid
           imagePullPolicy: Always
           env:
             - name: OPENSM_PRIORITY
               value: "15"
+            - name: OPENSM_SM_ASSIGNED_GUID
+              value: "0x02"
+            - name: OPENSM_EXTRA_ARGS
+              value: "-f stdout"
           securityContext:
             privileged: true
           volumeMounts:
