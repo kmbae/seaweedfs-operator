@@ -44,7 +44,8 @@ metadata:
           "interface": "net1",
           "cni-args": {
             "mellanox.infiniband.app": "configured",
-            "pkey": ""
+            "guid": "02:00:00:00:00:00:10:20",
+            "pkey": "0x7fff"
           }
         }
       ]
