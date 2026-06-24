@@ -1,0 +1,38 @@
+# r7615 shared-mode SR-IOV IB diagnostic pod with iproute2/rdma-core tools.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rdma-vf-shared-diag-r7615
+  namespace: default
+  annotations:
+    k8s.v1.cni.cncf.io/networks: |
+      [
+        {
+          "name": "sriov-ib-network",
+          "namespace": "default",
+          "infiniband-guid": "02:00:00:00:00:00:10:03",
+          "interface": "net1"
+        }
+      ]
+spec:
+  restartPolicy: Never
+  nodeSelector:
+    kubernetes.io/hostname: r7615
+  containers:
+    - name: rdma-diag
+      image: kmbae27/opensm:rdma-20260624-upstream-3.3.24
+      imagePullPolicy: IfNotPresent
+      command: ["/bin/sh", "-c", "sleep 3600"]
+      securityContext:
+        capabilities:
+          add:
+            - IPC_LOCK
+            - NET_ADMIN
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+          nvidia.com/mlnxnics: "1"
+        limits:
+          memory: 256Mi
+          nvidia.com/mlnxnics: "1"
