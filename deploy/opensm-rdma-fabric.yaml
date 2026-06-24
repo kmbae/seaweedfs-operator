@@ -30,6 +30,8 @@ spec:
               value: "15"
             - name: OPENSM_SM_ASSIGNED_GUID
               value: "0x02"
+            - name: OPENSM_GUID
+              value: "0x98039b03009fcedf"
             - name: OPENSM_SA_DB_FILE
               value: /etc/opensm/sa-db.txt
             - name: OPENSM_EXTRA_ARGS
