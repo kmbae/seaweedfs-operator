@@ -276,6 +276,10 @@ spec:
               value: {{ .Values.rdma.volumeNamespace | quote }}
             - name: RDMA_NETWORK_NAME
               value: {{ .Values.rdma.volumeNetworkName | quote }}
+            {{ if and .Values.rdma.enabled .Values.rdma.workerEngine.enabled .Values.rdma.workerSidecar.enabled }}
+            - name: RDMA_WORKER_SIDECAR_URL
+              value: "http://127.0.0.1:{{ .Values.rdma.workerSidecar.port }}"
+            {{ end }}
             {{ if and .Values.rdma.enabled .Values.rdma.workerEngine.enabled }}
             - name: RDMA_ENGINE_SOCKET
               value: {{ .Values.rdma.workerEngine.socketPath | quote }}
@@ -299,11 +303,36 @@ spec:
               memory: 64Mi
             limits:
               memory: 256Mi
+        {{ if and .Values.rdma.enabled .Values.rdma.workerEngine.enabled .Values.rdma.workerSidecar.enabled }}
+        - name: rdma-sidecar
+          image: {{ .Values.rdma.workerSidecar.image }}
+          imagePullPolicy: {{ .Values.rdma.workerSidecar.imagePullPolicy }}
+          args:
+            - --port
+            - {{ .Values.rdma.workerSidecar.port | quote }}
+            - --engine-socket
+            - {{ .Values.rdma.workerEngine.socketPath | quote }}
+            - --volume-server
+            - "http://127.0.0.1:8444"
+            - --enable-rdma=true
+            {{ if .Values.rdma.workerSidecar.debug }}
+            - --debug
+            {{ end }}
+          ports:
+            - name: rdma-sidecar
+              containerPort: {{ .Values.rdma.workerSidecar.port }}
+              protocol: TCP
+          volumeMounts:
+            - name: rdma-engine-socket
+              mountPath: {{ .Values.rdma.workerEngine.socketDir | quote }}
+          resources:
+{{ toYaml .Values.rdma.workerSidecar.resources | nindent 12 }}
+        {{ end }}
         {{ if and .Values.rdma.enabled .Values.rdma.workerEngine.enabled }}
         - name: rdma-engine
           image: {{ .Values.rdma.workerEngine.image }}
           imagePullPolicy: {{ .Values.rdma.workerEngine.imagePullPolicy }}
-          args:
+          command:
             - ./rdma-engine-server
             {{ if .Values.rdma.workerEngine.debug }}
             - --debug

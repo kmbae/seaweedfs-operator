@@ -130,6 +130,7 @@ data:
     LISTEN_PORT = int(os.environ.get("RDMA_GATEWAY_PORT", "18081"))
     RDMA_VOLUME_NAMESPACE = os.environ.get("RDMA_VOLUME_NAMESPACE", "seaweedfs")
     RDMA_NETWORK_NAME = os.environ.get("RDMA_NETWORK_NAME", "")
+    RDMA_WORKER_SIDECAR_URL = os.environ.get("RDMA_WORKER_SIDECAR_URL", "").rstrip("/")
     SERVICEACCOUNT_DIR = "/var/run/secrets/kubernetes.io/serviceaccount"
     RDMA_SERVER_CACHE = {}
 
@@ -232,6 +233,12 @@ data:
         return rdma_server
 
 
+    def upstream_base_url(volume_server: str) -> str:
+        if RDMA_WORKER_SIDECAR_URL:
+            return RDMA_WORKER_SIDECAR_URL
+        return sidecar_base_url(volume_server)
+
+
     class GatewayHandler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
@@ -275,7 +282,7 @@ data:
                 return
 
             try:
-                upstream = sidecar_base_url(vs_list[0]) + parsed.path
+                upstream = upstream_base_url(vs_list[0]) + parsed.path
                 rdma_server = rdma_server_for_volume(vs_list[0])
                 if rdma_server:
                     qs["rdma_server"] = [rdma_server]
