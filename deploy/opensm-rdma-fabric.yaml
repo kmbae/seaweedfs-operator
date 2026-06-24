@@ -21,13 +21,15 @@ spec:
         kubernetes.io/hostname: r7615
       containers:
         - name: opensm
-          image: kmbae27/opensm:rdma-20260624-smguid
+          image: kmbae27/opensm:rdma-20260624-sadb
           imagePullPolicy: Always
           env:
             - name: OPENSM_PRIORITY
               value: "15"
             - name: OPENSM_SM_ASSIGNED_GUID
               value: "0x02"
+            - name: OPENSM_SA_DB_FILE
+              value: /etc/opensm/sa-db.txt
             - name: OPENSM_EXTRA_ARGS
               value: "-f stdout"
           securityContext:
@@ -38,6 +40,10 @@ spec:
             - name: sys
               mountPath: /sys
               readOnly: true
+            - name: guidinfo-sa-db
+              mountPath: /etc/opensm/sa-db.txt
+              subPath: sa-db.txt
+              readOnly: true
       volumes:
         - name: dev-infiniband
           hostPath:
@@ -47,3 +53,6 @@ spec:
           hostPath:
             path: /sys
             type: Directory
+        - name: guidinfo-sa-db
+          configMap:
+            name: opensm-guidinfo-sa-db
