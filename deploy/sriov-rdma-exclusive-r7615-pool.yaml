@@ -8,6 +8,7 @@ metadata:
   namespace: nvidia-network-operator
 spec:
   nodeSelector:
-    kubernetes.io/hostname: r7615
+    matchLabels:
+      kubernetes.io/hostname: r7615
   rdmaMode: exclusive
   maxUnavailable: 1
