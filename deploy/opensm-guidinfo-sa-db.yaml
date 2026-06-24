@@ -7,4 +7,4 @@ data:
   sa-db.txt: |
     GUIDInfo Record: base_guid=0x58a2e10300f4f856 lid=0x0006 block_num=0x0 guid0=0x58a2e10300f4f856 guid1=0x58df20d72e5ef314 guid2=0xd448244debec0772 guid3=0x579d01eefd45f51c guid4=0xf1c9c689cd1fdd86 guid5=0xa06337f916ed933e guid6=0xa9c50ea670c42afa guid7=0x835e96489e4bdfb6
 
-    GUIDInfo Record: base_guid=0x98039b03009fcedf lid=0x0001 block_num=0x0 guid0=0x98039b03009fcedf guid1=0x4688f80dce91279d guid2=0x5bb11188b1ec1537 guid3=0x7589fd4bdf6bca7e guid4=0x429f9627890e8e10 guid5=0x0200000000001003 guid6=0x9ad978ddd1ca845c guid7=0xfd24e57a471cff95
+    GUIDInfo Record: base_guid=0x98039b03009fcedf lid=0x0001 block_num=0x0 guid0=0x98039b03009fcedf guid1=0x4688f80dce91279d guid2=0x5bb11188b1ec1537 guid3=0x7589fd4bdf6bca7e guid4=0x429f9627890e8e10 guid5=0x0200000000001004 guid6=0x9ad978ddd1ca845c guid7=0xfd24e57a471cff95

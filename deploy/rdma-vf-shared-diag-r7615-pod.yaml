@@ -10,7 +10,7 @@ metadata:
         {
           "name": "sriov-ib-network",
           "namespace": "default",
-          "infiniband-guid": "02:00:00:00:00:00:10:03",
+          "infiniband-guid": "02:00:00:00:00:00:10:04",
           "interface": "net1"
         }
       ]
