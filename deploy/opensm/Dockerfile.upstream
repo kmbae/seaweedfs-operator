@@ -1,0 +1,47 @@
+FROM ubuntu:24.04 AS builder
+
+ARG OPENSM_REF=8fe74e7
+
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        autoconf \
+        automake \
+        bison \
+        ca-certificates \
+        flex \
+        gcc \
+        git \
+        libibumad-dev \
+        libibverbs-dev \
+        libtool \
+        libtool-bin \
+        make \
+        pkg-config \
+        rdma-core \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+RUN git clone https://github.com/linux-rdma/opensm.git . \
+    && git checkout "${OPENSM_REF}"
+
+RUN ./autogen.sh \
+    && ./configure --prefix=/usr --sysconfdir=/etc --libdir=/usr/lib/x86_64-linux-gnu --disable-static \
+    && make -j"$(nproc)" \
+    && make install DESTDIR=/out
+
+FROM ubuntu:24.04
+
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        ca-certificates \
+        ibverbs-utils \
+        infiniband-diags \
+        iproute2 \
+        rdma-core \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /out/ /
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
