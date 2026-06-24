@@ -1,0 +1,63 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rdma-vf-post-opensm-r7615
+  namespace: default
+  annotations:
+    k8s.v1.cni.cncf.io/networks: |
+      [
+        {
+          "name": "sriov-ib-network",
+          "namespace": "default",
+          "interface": "net1"
+        }
+      ]
+spec:
+  restartPolicy: Never
+  nodeSelector:
+    kubernetes.io/hostname: r7615
+  containers:
+    - name: rdma-probe
+      image: kmbae27/rdma-engine:rdma-20260624-3cedc8c
+      imagePullPolicy: IfNotPresent
+      command: ["/bin/sh", "-c", "sleep 3600"]
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+          nvidia.com/mlnxnics: "1"
+        limits:
+          memory: 256Mi
+          nvidia.com/mlnxnics: "1"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rdma-vf-post-opensm-hnode3
+  namespace: default
+  annotations:
+    k8s.v1.cni.cncf.io/networks: |
+      [
+        {
+          "name": "sriov-ib-network",
+          "namespace": "default",
+          "interface": "net1"
+        }
+      ]
+spec:
+  restartPolicy: Never
+  nodeSelector:
+    kubernetes.io/hostname: hnode3
+  containers:
+    - name: rdma-probe
+      image: kmbae27/rdma-engine:rdma-20260624-3cedc8c
+      imagePullPolicy: IfNotPresent
+      command: ["/bin/sh", "-c", "sleep 3600"]
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+          nvidia.com/mlnxnics: "1"
+        limits:
+          memory: 256Mi
+          nvidia.com/mlnxnics: "1"
