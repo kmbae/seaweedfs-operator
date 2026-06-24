@@ -1,0 +1,13 @@
+# RDMA CNI chained plugin requires exclusive RDMA subsystem mode.
+# Apply this only during a maintenance window: the SR-IOV operator may drain
+# and reboot selected nodes while changing the RDMA namespace mode.
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovNetworkPoolConfig
+metadata:
+  name: rdma-exclusive-r7615
+  namespace: nvidia-network-operator
+spec:
+  nodeSelector:
+    kubernetes.io/hostname: r7615
+  rdmaMode: exclusive
+  maxUnavailable: 1
