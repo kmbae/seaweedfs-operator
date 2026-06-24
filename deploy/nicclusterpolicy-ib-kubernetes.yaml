@@ -35,4 +35,4 @@ spec:
     pKeyGUIDPoolRangeStart: "02:00:00:00:00:00:10:00"
     pKeyGUIDPoolRangeEnd: "02:00:00:00:00:00:ff:ff"
     periodicUpdateSeconds: 5
-    ufmSecret: ""
+    ufmSecret: ib-kubernetes-ufm-secret
