@@ -40,8 +40,12 @@ metadata:
         {
           "name": "sriov-ib-rdma-network",
           "namespace": "default",
-          "infiniband-guid": "02:00:00:00:00:00:10:04",
-          "interface": "net1"
+          "infiniband-guid": "02:00:00:00:00:00:10:20",
+          "interface": "net1",
+          "cni-args": {
+            "mellanox.infiniband.app": "configured",
+            "pkey": ""
+          }
         }
       ]
 spec:
