@@ -1,0 +1,8 @@
+{
+  "spec": {
+    "configurationMode": "systemd",
+    "featureGates": {
+      "parallelNicConfig": true
+    }
+  }
+}
