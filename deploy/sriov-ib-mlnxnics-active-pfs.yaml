@@ -28,6 +28,7 @@ spec:
   networkNamespace: default
   resourceName: mlnxnics
   linkState: enable
+  capabilities: '{"infinibandGUID": true}'
   ipam: |
     {
       "type": "nv-ipam",
