@@ -34,3 +34,24 @@ rdma:
   enabled: true
   gatewayImage: python:3.12-alpine
   configMapName: seaweedfs-csi-rdma
+  gatewayPort: 18081
+  volumeSidecarPort: 8081
+  workerEngine:
+    enabled: false
+    image: kmbae27/rdma-engine:ucx
+    imagePullPolicy: IfNotPresent
+    socketDir: /tmp/rdma
+    socketPath: /tmp/rdma/rdma-engine.sock
+    port: 18515
+    debug: true
+    multusNetworks: "default/sriov-ib-network"
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+        hugepages-2Mi: 1Gi
+        nvidia.com/mlnxnics: 1
+      limits:
+        memory: 1Gi
+        hugepages-2Mi: 1Gi
+        nvidia.com/mlnxnics: 1

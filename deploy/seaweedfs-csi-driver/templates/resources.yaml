@@ -185,6 +185,10 @@ spec:
     metadata:
       labels:
         app: seaweedfs-mount
+{{ if and .Values.rdma.enabled .Values.rdma.workerEngine.enabled .Values.rdma.workerEngine.multusNetworks }}
+      annotations:
+        k8s.v1.cni.cncf.io/networks: {{ .Values.rdma.workerEngine.multusNetworks | quote }}
+{{ end }}
     spec:
       priorityClassName: system-node-critical
       serviceAccountName: seaweedfs-node-sa
@@ -218,13 +222,17 @@ spec:
             - name: RDMA_ENABLED
               value: "true"
             - name: RDMA_SIDECAR_ADDR
-              value: "127.0.0.1:18081"
+              value: "127.0.0.1:{{ .Values.rdma.gatewayPort }}"
             - name: RDMA_FALLBACK
               value: "true"
             - name: RDMA_READ_ONLY
               value: "false"
             - name: WEED_REAL_BINARY
               value: "/weed-bin/weed"
+            {{ if and .Values.rdma.enabled .Values.rdma.workerEngine.enabled }}
+            - name: RDMA_ENGINE_SOCKET
+              value: {{ .Values.rdma.workerEngine.socketPath | quote }}
+            {{ end }}
             {{- if .Values.mount.extraArgs }}
             - name: WEED_MOUNT_EXTRA_ARGS
               value: {{ join " " .Values.mount.extraArgs | quote }}
@@ -247,6 +255,10 @@ spec:
               mountPath: /var/lib/seaweedfs-mount
             - name: csi-rdma-scripts
               mountPath: /csi-rdma
+            {{ if and .Values.rdma.enabled .Values.rdma.workerEngine.enabled }}
+            - name: rdma-engine-socket
+              mountPath: {{ .Values.rdma.workerEngine.socketDir | quote }}
+            {{ end }}
         - name: rdma-gateway
           image: {{ .Values.rdma.gatewayImage }}
           imagePullPolicy: IfNotPresent
@@ -255,33 +267,70 @@ spec:
             - /csi-rdma/rdma-gateway.py
           env:
             - name: RDMA_SIDECAR_PORT
-              value: "8081"
+              value: {{ .Values.rdma.volumeSidecarPort | quote }}
             - name: RDMA_GATEWAY_HOST
               value: "127.0.0.1"
             - name: RDMA_GATEWAY_PORT
-              value: "18081"
+              value: {{ .Values.rdma.gatewayPort | quote }}
+            {{ if and .Values.rdma.enabled .Values.rdma.workerEngine.enabled }}
+            - name: RDMA_ENGINE_SOCKET
+              value: {{ .Values.rdma.workerEngine.socketPath | quote }}
+            {{ end }}
           ports:
             - name: rdma-gw
-              containerPort: 18081
-              hostPort: 18081
+              containerPort: {{ .Values.rdma.gatewayPort }}
+              hostPort: {{ .Values.rdma.gatewayPort }}
               protocol: TCP
           volumeMounts:
             - name: csi-rdma-scripts
               mountPath: /csi-rdma
               readOnly: true
+            {{ if and .Values.rdma.enabled .Values.rdma.workerEngine.enabled }}
+            - name: rdma-engine-socket
+              mountPath: {{ .Values.rdma.workerEngine.socketDir | quote }}
+            {{ end }}
           resources:
             requests:
               cpu: 50m
               memory: 64Mi
             limits:
               memory: 256Mi
+        {{ if and .Values.rdma.enabled .Values.rdma.workerEngine.enabled }}
+        - name: rdma-engine
+          image: {{ .Values.rdma.workerEngine.image }}
+          imagePullPolicy: {{ .Values.rdma.workerEngine.imagePullPolicy }}
+          args:
+            - ./rdma-engine-server
+            {{ if .Values.rdma.workerEngine.debug }}
+            - --debug
+            {{ end }}
+            - --ipc-socket
+            - {{ .Values.rdma.workerEngine.socketPath | quote }}
+            - --port
+            - {{ .Values.rdma.workerEngine.port | quote }}
+          ports:
+            - name: rdma-engine
+              containerPort: {{ .Values.rdma.workerEngine.port }}
+              protocol: TCP
+          volumeMounts:
+            - name: rdma-engine-socket
+              mountPath: {{ .Values.rdma.workerEngine.socketDir | quote }}
+            - name: device-dir
+              mountPath: /dev
+          resources:
+{{ toYaml .Values.rdma.workerEngine.resources | nindent 12 }}
+        {{ end }}
       volumes:
         - name: weed-bin
           emptyDir: {}
         - name: csi-rdma-scripts
           configMap:
-            name: seaweedfs-csi-rdma
+            name: {{ .Values.rdma.configMapName }}
             defaultMode: 0755
+        {{ if and .Values.rdma.enabled .Values.rdma.workerEngine.enabled }}
+        - name: rdma-engine-socket
+          emptyDir: {}
+        {{ end }}
         - name: plugins-dir
           hostPath:
             path: {{ .Values.kubelet.rootDir }}/plugins

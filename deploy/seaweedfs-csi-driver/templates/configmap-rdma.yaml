@@ -4,7 +4,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: seaweedfs-csi-rdma
+  name: {{ .Values.rdma.configMapName }}
   namespace: {{ .Release.Namespace }}
 data:
   weed-rdma-wrapper.sh: |
@@ -157,6 +157,7 @@ data:
                     "status": "healthy",
                     "rdma": {"enabled": True, "connected": True},
                     "gateway": True,
+                    "worker_engine_socket": os.environ.get("RDMA_ENGINE_SOCKET", ""),
                 }
             ).encode()
             self.send_response(200)
@@ -206,6 +207,9 @@ data:
                             "content-length",
                             "x-source",
                             "x-rdma-used",
+                            "x-rdma-session-used",
+                            "x-real-rdma",
+                            "x-data-source",
                             "x-temp-file",
                             "x-use-temp-file",
                         ):
