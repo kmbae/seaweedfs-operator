@@ -1,0 +1,36 @@
+# Keep the public SR-IOV names stable while selecting only currently linked IB ports.
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovNetworkNodePolicy
+metadata:
+  name: infiniband-sriov
+  namespace: nvidia-network-operator
+spec:
+  priority: 99
+  resourceName: mlnxnics
+  numVfs: 8
+  deviceType: netdevice
+  isRdma: true
+  linkType: IB
+  mtu: 1500
+  nicSelector:
+    rootDevices:
+      - "0000:f5:00.0"
+      - "0000:c1:00.0"
+      - "0000:01:00.1"
+  nodeSelector:
+    feature.node.kubernetes.io/pci-15b3.present: "true"
+---
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovIBNetwork
+metadata:
+  name: sriov-ib-network
+  namespace: nvidia-network-operator
+spec:
+  networkNamespace: default
+  resourceName: mlnxnics
+  linkState: enable
+  ipam: |
+    {
+      "type": "nv-ipam",
+      "poolName": "sriov-ib-pool"
+    }

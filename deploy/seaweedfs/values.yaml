@@ -93,7 +93,7 @@ rdma:
   sidecarTag: latest
   engineTag: ucx
   imagePullPolicy: Always
-  multusNetwork: sriov-ib-network
+  multusNetwork: default/sriov-ib-network
   mlnxnicResource: nvidia.com/mlnxnics
   hugepages2Mi: 1Gi
   listenPort: 18515
