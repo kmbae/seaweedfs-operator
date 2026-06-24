@@ -36,6 +36,8 @@ rdma:
   configMapName: seaweedfs-csi-rdma
   gatewayPort: 18081
   volumeSidecarPort: 8081
+  volumeNamespace: seaweedfs
+  volumeNetworkName: "default/sriov-ib-network"
   workerEngine:
     enabled: false
     image: kmbae27/rdma-engine:ucx

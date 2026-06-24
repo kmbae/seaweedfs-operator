@@ -115,25 +115,121 @@ data:
 
   rdma-gateway.py: |
     #!/usr/bin/env python3
-    """Proxy weed mount RDMA HTTP API to per-volume rdma-sidecar pods (port 8081)."""
+    """Proxy weed mount RDMA HTTP API to per-volume rdma-sidecar pods."""
     import json
     import os
+    import ssl
     import sys
     import urllib.error
     import urllib.request
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-    from urllib.parse import parse_qs, urlparse
+    from urllib.parse import parse_qs, quote, urlencode, urlparse
 
     SIDECAR_PORT = int(os.environ.get("RDMA_SIDECAR_PORT", "8081"))
     LISTEN_HOST = os.environ.get("RDMA_GATEWAY_HOST", "127.0.0.1")
     LISTEN_PORT = int(os.environ.get("RDMA_GATEWAY_PORT", "18081"))
+    RDMA_VOLUME_NAMESPACE = os.environ.get("RDMA_VOLUME_NAMESPACE", "seaweedfs")
+    RDMA_NETWORK_NAME = os.environ.get("RDMA_NETWORK_NAME", "")
+    SERVICEACCOUNT_DIR = "/var/run/secrets/kubernetes.io/serviceaccount"
+    RDMA_SERVER_CACHE = {}
+
+
+    def parsed_volume(volume_server: str):
+        target = volume_server if "://" in volume_server else "http://" + volume_server
+        return urlparse(target)
 
 
     def sidecar_base_url(volume_server: str) -> str:
-        parsed = urlparse(volume_server)
+        parsed = parsed_volume(volume_server)
         if not parsed.hostname:
             raise ValueError("invalid volume_server: %r" % (volume_server,))
         return "http://%s:%d" % (parsed.hostname, SIDECAR_PORT)
+
+
+    def volume_host(volume_server: str) -> str:
+        return parsed_volume(volume_server).hostname or ""
+
+
+    def read_serviceaccount_file(name: str) -> str:
+        with open(os.path.join(SERVICEACCOUNT_DIR, name), "r", encoding="utf-8") as f:
+            return f.read().strip()
+
+
+    def kube_get(path: str):
+        host = os.environ.get("KUBERNETES_SERVICE_HOST", "")
+        port = os.environ.get("KUBERNETES_SERVICE_PORT", "443")
+        if not host:
+            return None
+        try:
+            token = read_serviceaccount_file("token")
+        except OSError:
+            return None
+        req = urllib.request.Request("https://%s:%s%s" % (host, port, path))
+        req.add_header("Authorization", "Bearer %s" % token)
+        try:
+            with urllib.request.urlopen(
+                req,
+                timeout=2,
+                context=ssl._create_unverified_context(),
+            ) as resp:
+                return json.loads(resp.read())
+        except Exception as exc:
+            sys.stderr.write("[rdma-gateway] kube lookup failed for %s: %s\n" % (path, exc))
+            return None
+
+
+    def pod_from_volume_host(host: str):
+        if not host:
+            return None
+        if all(ch.isdigit() or ch == "." for ch in host):
+            selector = quote("status.podIP=%s" % host, safe="")
+            data = kube_get("/api/v1/pods?fieldSelector=%s" % selector)
+            items = (data or {}).get("items") or []
+            return items[0] if items else None
+
+        parts = host.split(".")
+        pod_name = parts[0]
+        namespace = RDMA_VOLUME_NAMESPACE
+        if len(parts) >= 3:
+            namespace = parts[2]
+        return kube_get("/api/v1/namespaces/%s/pods/%s" % (namespace, pod_name))
+
+
+    def rdma_ip_from_pod(pod) -> str:
+        annotations = (((pod or {}).get("metadata") or {}).get("annotations") or {})
+        raw_status = annotations.get("k8s.v1.cni.cncf.io/network-status", "")
+        if not raw_status:
+            return ""
+        try:
+            networks = json.loads(raw_status)
+        except json.JSONDecodeError:
+            return ""
+        expected_names = {RDMA_NETWORK_NAME, RDMA_NETWORK_NAME.split("/")[-1]}
+        for network in networks:
+            name = network.get("name", "")
+            if RDMA_NETWORK_NAME and name not in expected_names:
+                continue
+            ips = network.get("ips") or []
+            if ips:
+                return ips[0]
+        return ""
+
+
+    def rdma_server_for_volume(volume_server: str) -> str:
+        if not RDMA_NETWORK_NAME:
+            return ""
+        host = volume_host(volume_server)
+        if host in RDMA_SERVER_CACHE:
+            return RDMA_SERVER_CACHE[host]
+        pod = pod_from_volume_host(host)
+        ip = rdma_ip_from_pod(pod)
+        rdma_server = "http://%s" % ip if ip else ""
+        RDMA_SERVER_CACHE[host] = rdma_server
+        if rdma_server:
+            sys.stderr.write(
+                "[rdma-gateway] %s uses RDMA data-plane %s\n" % (volume_server, rdma_server)
+            )
+        return rdma_server
 
 
     class GatewayHandler(BaseHTTPRequestHandler):
@@ -180,8 +276,12 @@ data:
 
             try:
                 upstream = sidecar_base_url(vs_list[0]) + parsed.path
-                if parsed.query:
-                    upstream += "?" + parsed.query
+                rdma_server = rdma_server_for_volume(vs_list[0])
+                if rdma_server:
+                    qs["rdma_server"] = [rdma_server]
+                forward_query = urlencode(qs, doseq=True)
+                if forward_query:
+                    upstream += "?" + forward_query
             except ValueError as exc:
                 self.send_error(400, str(exc))
                 return

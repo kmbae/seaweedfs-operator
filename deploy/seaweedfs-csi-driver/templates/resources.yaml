@@ -272,6 +272,10 @@ spec:
               value: "127.0.0.1"
             - name: RDMA_GATEWAY_PORT
               value: {{ .Values.rdma.gatewayPort | quote }}
+            - name: RDMA_VOLUME_NAMESPACE
+              value: {{ .Values.rdma.volumeNamespace | quote }}
+            - name: RDMA_NETWORK_NAME
+              value: {{ .Values.rdma.volumeNetworkName | quote }}
             {{ if and .Values.rdma.enabled .Values.rdma.workerEngine.enabled }}
             - name: RDMA_ENGINE_SOCKET
               value: {{ .Values.rdma.workerEngine.socketPath | quote }}
