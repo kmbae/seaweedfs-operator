@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opensm-rdma-fabric
+  namespace: nvidia-network-operator
+  labels:
+    app: opensm-rdma-fabric
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opensm-rdma-fabric
+  template:
+    metadata:
+      labels:
+        app: opensm-rdma-fabric
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector:
+        kubernetes.io/hostname: r7615
+      containers:
+        - name: opensm
+          image: kmbae27/opensm:rdma-20260624
+          imagePullPolicy: Always
+          env:
+            - name: OPENSM_PRIORITY
+              value: "15"
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: dev-infiniband
+              mountPath: /dev/infiniband
+            - name: sys
+              mountPath: /sys
+              readOnly: true
+      volumes:
+        - name: dev-infiniband
+          hostPath:
+            path: /dev/infiniband
+            type: Directory
+        - name: sys
+          hostPath:
+            path: /sys
+            type: Directory
