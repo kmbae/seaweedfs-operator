@@ -50,7 +50,7 @@ rdma:
     ucxNetDevices: ""
     socketDir: /tmp/rdma
     socketPath: /tmp/rdma/rdma-engine.sock
-    port: 18515
+    port: 28515
     debug: true
     multusNetworks: "default/sriov-ib-network"
     resources:
@@ -63,7 +63,7 @@ rdma:
     enabled: true
     image: kmbae27/rdma-sidecar:rdma-20260625-b1a37774
     imagePullPolicy: Always
-    port: 8081
+    port: 18082
     debug: true
     resources:
       requests:

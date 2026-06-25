@@ -357,6 +357,8 @@ spec:
             - name: UCX_TLS
               value: {{ .Values.rdma.workerEngine.ucxTls | quote }}
             {{ end }}
+            - name: RDMA_LISTEN_PORT
+              value: {{ .Values.rdma.workerEngine.port | quote }}
             {{ if .Values.rdma.workerEngine.ucxNetDevices }}
             - name: UCX_NET_DEVICES
               value: {{ .Values.rdma.workerEngine.ucxNetDevices | quote }}
