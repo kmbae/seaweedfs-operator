@@ -43,7 +43,7 @@ rdma:
   volumeNetworkName: "default/sriov-ib-network"
   workerEngine:
     enabled: true
-    image: kmbae27/rdma-engine:rdma-20260625-7f092413
+    image: kmbae27/rdma-engine:rdma-20260625-8f7c7c26
     imagePullPolicy: Always
     deviceName: ""
     ucxTls: rc_verbs,ud_verbs,tcp,self
@@ -63,7 +63,7 @@ rdma:
         memory: 1Gi
   workerSidecar:
     enabled: true
-    image: kmbae27/rdma-sidecar:rdma-20260625-27d16fc1
+    image: kmbae27/rdma-sidecar:rdma-20260625-8f7c7c26
     imagePullPolicy: Always
     port: 18082
     debug: true
