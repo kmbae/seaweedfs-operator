@@ -188,13 +188,17 @@ spec:
     metadata:
       labels:
         app: seaweedfs-mount
-{{ if and .Values.rdma.enabled .Values.rdma.workerEngine.enabled .Values.rdma.workerEngine.multusNetworks }}
+{{ if and .Values.rdma.enabled .Values.rdma.workerEngine.enabled .Values.rdma.workerEngine.multusNetworks (ne (default "sriov" .Values.rdma.mode) "hostPF") }}
       annotations:
         k8s.v1.cni.cncf.io/networks: {{ .Values.rdma.workerEngine.multusNetworks | quote }}
 {{ end }}
     spec:
       priorityClassName: system-node-critical
       serviceAccountName: seaweedfs-node-sa
+{{ if and .Values.rdma.enabled .Values.rdma.workerEngine.enabled (eq (default "sriov" .Values.rdma.mode) "hostPF") }}
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+{{ end }}
       initContainers:
         - name: copy-weed
           image: {{ .Values.images.weedCopy }}
@@ -340,10 +344,26 @@ spec:
             {{ if .Values.rdma.workerEngine.debug }}
             - --debug
             {{ end }}
+            {{ if .Values.rdma.workerEngine.deviceName }}
+            - --device
+            - {{ .Values.rdma.workerEngine.deviceName | quote }}
+            {{ end }}
             - --ipc-socket
             - {{ .Values.rdma.workerEngine.socketPath | quote }}
             - --port
             - {{ .Values.rdma.workerEngine.port | quote }}
+          env:
+            {{ if .Values.rdma.workerEngine.ucxTls }}
+            - name: UCX_TLS
+              value: {{ .Values.rdma.workerEngine.ucxTls | quote }}
+            {{ end }}
+            {{ if .Values.rdma.workerEngine.ucxNetDevices }}
+            - name: UCX_NET_DEVICES
+              value: {{ .Values.rdma.workerEngine.ucxNetDevices | quote }}
+            {{ else if and (eq (default "sriov" .Values.rdma.mode) "hostPF") .Values.rdma.workerEngine.deviceName }}
+            - name: UCX_NET_DEVICES
+              value: {{ printf "%s:1" .Values.rdma.workerEngine.deviceName | quote }}
+            {{ end }}
           ports:
             - name: rdma-engine
               containerPort: {{ .Values.rdma.workerEngine.port }}
@@ -441,14 +461,6 @@ spec:
               value: "seaweedfs-csi-driver"
             - name: MOUNT_ENDPOINT
               value: "unix:///var/lib/seaweedfs-mount/seaweedfs-mount.sock"
-          ports:
-          livenessProbe:
-            httpGet:
-              path: /healthz
-              port: healthz
-            initialDelaySeconds: 10
-            timeoutSeconds: 3
-            periodSeconds: 60
           volumeMounts:
             - name: plugin-dir
               mountPath: /csi
@@ -486,11 +498,10 @@ spec:
                   fieldPath: spec.nodeName
           ports:
             - containerPort: 9809
-              name: healthz
           livenessProbe:
             httpGet:
               path: /healthz
-              port: healthz
+              port: 9809
             initialDelaySeconds: 10
             timeoutSeconds: 3
             periodSeconds: 60
@@ -514,7 +525,13 @@ spec:
               value: /csi/csi.sock
           ports:
             - containerPort: 9808
-              name: livenessprobe
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 9808
+            initialDelaySeconds: 10
+            timeoutSeconds: 3
+            periodSeconds: 60
           volumeMounts:
             - name: plugin-dir
               mountPath: /csi
@@ -595,14 +612,6 @@ spec:
 
             - name: DRIVER_NAME
               value: "seaweedfs-csi-driver"
-          ports:
-          livenessProbe:
-            httpGet:
-              path: /healthz
-              port: healthz
-            initialDelaySeconds: 10
-            timeoutSeconds: 3
-            periodSeconds: 60
           volumeMounts:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
@@ -624,11 +633,10 @@ spec:
               value: /var/lib/csi/sockets/pluginproxy/csi.sock
           ports:
             - containerPort: 9809
-              name: healthz
           livenessProbe:
             httpGet:
               path: /healthz/leader-election
-              port: healthz
+              port: 9809
             initialDelaySeconds: 10
             timeoutSeconds: 3
             periodSeconds: 60
@@ -653,11 +661,10 @@ spec:
               value: /var/lib/csi/sockets/pluginproxy/csi.sock
           ports:
             - containerPort: 9810
-              name: healthz
           livenessProbe:
             httpGet:
               path: /healthz/leader-election
-              port: healthz
+              port: 9810
             initialDelaySeconds: 10
             timeoutSeconds: 3
             periodSeconds: 60
@@ -680,11 +687,10 @@ spec:
               value: /var/lib/csi/sockets/pluginproxy/csi.sock
           ports:
             - containerPort: 9811
-              name: healthz
           livenessProbe:
             httpGet:
               path: /healthz/leader-election
-              port: healthz
+              port: 9811
             initialDelaySeconds: 10
             timeoutSeconds: 3
             periodSeconds: 60
@@ -706,7 +712,13 @@ spec:
               value: /var/lib/csi/sockets/pluginproxy/csi.sock
           ports:
             - containerPort: 9808
-              name: livenessprobe
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 9808
+            initialDelaySeconds: 10
+            timeoutSeconds: 3
+            periodSeconds: 60
           volumeMounts:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/

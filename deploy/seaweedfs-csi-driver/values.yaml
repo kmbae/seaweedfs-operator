@@ -23,7 +23,7 @@ images:
   # v1.4.20+ applies PVC capacity as collectionQuotaMB at mount time (PR #279).
   csiDriver: chrislusf/seaweedfs-csi-driver:v1.4.20
   mount: chrislusf/seaweedfs-mount:v1.4.20
-  weedCopy: kmbae27/seaweedfs:latest
+  weedCopy: kmbae27/seaweedfs:large_disk
   nodeRegistrar: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.8.0
   provisioner: registry.k8s.io/sig-storage/csi-provisioner:v3.5.0
   attacher: registry.k8s.io/sig-storage/csi-attacher:v4.3.0
@@ -32,6 +32,9 @@ images:
 
 rdma:
   enabled: true
+  # sriov: attach a VF through Multus/SR-IOV.
+  # hostPF: use the node host RDMA PF for lab validation.
+  mode: hostPF
   gatewayImage: python:3.12-alpine
   configMapName: seaweedfs-csi-rdma
   gatewayPort: 18081
@@ -42,6 +45,9 @@ rdma:
     enabled: false
     image: kmbae27/rdma-engine:ucx
     imagePullPolicy: IfNotPresent
+    deviceName: mlx5_1
+    ucxTls: rc_verbs,ud_verbs,tcp,self
+    ucxNetDevices: ""
     socketDir: /tmp/rdma
     socketPath: /tmp/rdma/rdma-engine.sock
     port: 18515
@@ -51,10 +57,8 @@ rdma:
       requests:
         cpu: 100m
         memory: 256Mi
-        nvidia.com/mlnxnics: 1
       limits:
         memory: 1Gi
-        nvidia.com/mlnxnics: 1
   workerSidecar:
     enabled: false
     image: kmbae27/rdma-sidecar:latest

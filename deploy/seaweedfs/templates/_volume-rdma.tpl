@@ -4,12 +4,17 @@ Usage: {{- include "seaweedfs.rdmaVolumeGroup" . | nindent 4 }}
 */}}
 {{- define "seaweedfs.rdmaSidecarsOnly" -}}
 {{- if .Values.rdma.enabled }}
+{{- $rdmaMode := default "sriov" .Values.rdma.mode }}
 - name: rdma-engine
   image: {{ printf "%s/rdma-engine:%s" .Values.rdma.registry .Values.rdma.engineTag }}
   imagePullPolicy: {{ .Values.rdma.imagePullPolicy }}
   command:
     - ./rdma-engine-server
     - --debug
+    {{- if .Values.rdma.deviceName }}
+    - --device
+    - {{ .Values.rdma.deviceName | quote }}
+    {{- end }}
     - --ipc-socket
     - /tmp/rdma/rdma-engine.sock
     - --port
@@ -19,10 +24,36 @@ Usage: {{- include "seaweedfs.rdmaVolumeGroup" . | nindent 4 }}
       value: {{ .Values.rdma.volumeServerURL | quote }}
     - name: RDMA_LISTEN_PORT
       value: {{ .Values.rdma.listenPort | quote }}
+    {{- if .Values.rdma.ucxTls }}
+    - name: UCX_TLS
+      value: {{ .Values.rdma.ucxTls | quote }}
+    {{- end }}
+    {{- if .Values.rdma.ucxNetDevices }}
+    - name: UCX_NET_DEVICES
+      value: {{ .Values.rdma.ucxNetDevices | quote }}
+    {{- else if and (eq $rdmaMode "hostPF") .Values.rdma.deviceName }}
+    - name: UCX_NET_DEVICES
+      value: {{ printf "%s:1" .Values.rdma.deviceName | quote }}
+    {{- end }}
   securityContext:
+    {{- if eq $rdmaMode "hostPF" }}
+    privileged: true
+    {{- end }}
     capabilities:
-      add: ["IPC_LOCK"]
+      add:
+        - IPC_LOCK
+        {{- if eq $rdmaMode "hostPF" }}
+        - NET_ADMIN
+        - SYS_ADMIN
+        {{- end }}
   resources:
+    {{- if eq $rdmaMode "hostPF" }}
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+    {{- else }}
     limits:
       memory: {{ .Values.rdma.hugepages2Mi }}
       {{ .Values.rdma.mlnxnicResource }}: "1"
@@ -31,9 +62,14 @@ Usage: {{- include "seaweedfs.rdmaVolumeGroup" . | nindent 4 }}
       memory: {{ .Values.rdma.hugepages2Mi }}
       {{ .Values.rdma.mlnxnicResource }}: "1"
       hugepages-2Mi: {{ .Values.rdma.hugepages2Mi }}
+    {{- end }}
   volumeMounts:
     - name: rdma-socket
       mountPath: /tmp/rdma
+    {{- if eq $rdmaMode "hostPF" }}
+    - name: dev-infiniband
+      mountPath: /dev/infiniband
+    {{- end }}
   ports:
     - name: rdma-net
       containerPort: {{ .Values.rdma.listenPort }}
@@ -60,11 +96,20 @@ Usage: {{- include "seaweedfs.rdmaVolumeGroup" . | nindent 4 }}
 
 {{- define "seaweedfs.rdmaVolumeGroup" -}}
 {{- if .Values.rdma.enabled }}
+{{- $rdmaMode := default "sriov" .Values.rdma.mode }}
+{{- if ne $rdmaMode "hostPF" }}
 annotations:
   k8s.v1.cni.cncf.io/networks: {{ .Values.rdma.multusNetwork | quote }}
+{{- end }}
 volumes:
   - name: rdma-socket
     emptyDir: {}
+  {{- if eq $rdmaMode "hostPF" }}
+  - name: dev-infiniband
+    hostPath:
+      path: /dev/infiniband
+      type: Directory
+  {{- end }}
 volumeMounts:
   - name: rdma-socket
     mountPath: /tmp/rdma
@@ -75,6 +120,10 @@ sidecars:
     command:
       - ./rdma-engine-server
       - --debug
+      {{- if .Values.rdma.deviceName }}
+      - --device
+      - {{ .Values.rdma.deviceName | quote }}
+      {{- end }}
       - --ipc-socket
       - /tmp/rdma/rdma-engine.sock
       - --port
@@ -84,10 +133,36 @@ sidecars:
         value: {{ .Values.rdma.volumeServerURL | quote }}
       - name: RDMA_LISTEN_PORT
         value: {{ .Values.rdma.listenPort | quote }}
+      {{- if .Values.rdma.ucxTls }}
+      - name: UCX_TLS
+        value: {{ .Values.rdma.ucxTls | quote }}
+      {{- end }}
+      {{- if .Values.rdma.ucxNetDevices }}
+      - name: UCX_NET_DEVICES
+        value: {{ .Values.rdma.ucxNetDevices | quote }}
+      {{- else if and (eq $rdmaMode "hostPF") .Values.rdma.deviceName }}
+      - name: UCX_NET_DEVICES
+        value: {{ printf "%s:1" .Values.rdma.deviceName | quote }}
+      {{- end }}
     securityContext:
+      {{- if eq $rdmaMode "hostPF" }}
+      privileged: true
+      {{- end }}
       capabilities:
-        add: ["IPC_LOCK"]
+        add:
+          - IPC_LOCK
+          {{- if eq $rdmaMode "hostPF" }}
+          - NET_ADMIN
+          - SYS_ADMIN
+          {{- end }}
     resources:
+      {{- if eq $rdmaMode "hostPF" }}
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        memory: 1Gi
+      {{- else }}
       limits:
         memory: {{ .Values.rdma.hugepages2Mi }}
         {{ .Values.rdma.mlnxnicResource }}: "1"
@@ -96,9 +171,14 @@ sidecars:
         memory: {{ .Values.rdma.hugepages2Mi }}
         {{ .Values.rdma.mlnxnicResource }}: "1"
         hugepages-2Mi: {{ .Values.rdma.hugepages2Mi }}
+      {{- end }}
     volumeMounts:
       - name: rdma-socket
         mountPath: /tmp/rdma
+      {{- if eq $rdmaMode "hostPF" }}
+      - name: dev-infiniband
+        mountPath: /dev/infiniband
+      {{- end }}
     ports:
       - name: rdma-net
         containerPort: {{ .Values.rdma.listenPort }}

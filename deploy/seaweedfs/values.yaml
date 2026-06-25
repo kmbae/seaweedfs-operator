@@ -1,6 +1,6 @@
 # Seaweed CR name (defaults to Helm release name)
 name: ""
-image: kmbae27/seaweedfs:latest
+image: kmbae27/seaweedfs:large_disk
 volumeServerDiskCount: 1
 hostSuffix: ""
 labels: {}
@@ -8,7 +8,8 @@ annotations: {}
 
 master:
   replicas: 1
-  volumeSizeLimitMB: 1024
+  # Requires 5BytesOffset (large_disk) image; max 8000GB per volume.
+  volumeSizeLimitMB: 1024000
   # Use "000" for a single node; use "010" when you have two or more racks
   defaultReplication: "000"
   metricsPort: 9327
@@ -88,11 +89,17 @@ admin:
     adminPassword: ""
 
 rdma:
-  enabled: false
+  enabled: true
+  # sriov: use Multus/SR-IOV VF resource.
+  # hostPF: use the node's host RDMA PF for lab validation while VF LID/UFM is unresolved.
+  mode: hostPF
   registry: kmbae27
   sidecarTag: latest
   engineTag: ucx
   imagePullPolicy: Always
+  deviceName: mlx5_1
+  ucxTls: rc_verbs,ud_verbs,tcp,self
+  ucxNetDevices: ""
   multusNetwork: default/sriov-ib-network
   mlnxnicResource: nvidia.com/mlnxnics
   hugepages2Mi: 1Gi

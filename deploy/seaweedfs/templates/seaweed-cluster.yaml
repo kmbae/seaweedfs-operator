@@ -5,6 +5,7 @@
 {{- end }}
 {{- end }}
 {{- $useTopology := gt (len $enabledNodes) 0 }}
+{{- $rdmaMode := default "sriov" .Values.rdma.mode }}
 apiVersion: seaweed.seaweedfs.com/v1
 kind: Seaweed
 metadata:
@@ -48,6 +49,9 @@ spec:
     {{- with .Values.volume.metricsPort }}
     metricsPort: {{ . }}
     {{- end }}
+    {{- if and .Values.rdma.enabled (eq $rdmaMode "hostPF") }}
+    hostNetwork: true
+    {{- end }}
     {{- if not $useTopology }}
     {{- with .Values.volume.rack }}
     rack: {{ . | quote }}
@@ -55,12 +59,12 @@ spec:
     {{- with .Values.volume.dataCenter }}
     dataCenter: {{ . | quote }}
     {{- end }}
-    {{- if or .Values.volume.annotations .Values.rdma.enabled }}
+    {{- if or .Values.volume.annotations (and .Values.rdma.enabled (ne $rdmaMode "hostPF")) }}
     annotations:
       {{- with .Values.volume.annotations }}
       {{- toYaml . | nindent 6 }}
       {{- end }}
-      {{- if .Values.rdma.enabled }}
+      {{- if and .Values.rdma.enabled (ne $rdmaMode "hostPF") }}
       k8s.v1.cni.cncf.io/networks: {{ .Values.rdma.multusNetwork | quote }}
       {{- end }}
     {{- end }}
@@ -68,6 +72,12 @@ spec:
     volumes:
       - name: rdma-socket
         emptyDir: {}
+      {{- if eq $rdmaMode "hostPF" }}
+      - name: dev-infiniband
+        hostPath:
+          path: /dev/infiniband
+          type: Directory
+      {{- end }}
     volumeMounts:
       - name: rdma-socket
         mountPath: /tmp/rdma
@@ -95,6 +105,9 @@ spec:
         storage: {{ default $.Values.volume.pvcRequest $node.pvcRequest | quote }}
       nodeSelector:
         kubernetes.io/hostname: {{ $node.node | quote }}
+      {{- if and $.Values.rdma.enabled (eq $rdmaMode "hostPF") }}
+      hostNetwork: true
+      {{- end }}
       {{- include "seaweedfs.rdmaVolumeGroup" $ | nindent 6 }}
     {{- end }}
   {{- end }}

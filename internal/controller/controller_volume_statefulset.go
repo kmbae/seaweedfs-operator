@@ -418,11 +418,11 @@ func (r *SeaweedReconciler) createVolumeServerTopologyStatefulSet(m *seaweedv1.S
 			SuccessThreshold:    1,
 			FailureThreshold:    6,
 		},
-		VolumeMounts: volumeMounts,
+		VolumeMounts: append(volumeMounts, topologySpec.VolumeMounts...),
 	}}
 	volumePodSpec.Containers = append(volumePodSpec.Containers, topologySpec.Sidecars...)
 	volumePodSpec.InitContainers = append(volumePodSpec.InitContainers, topologySpec.InitContainers...)
-	volumePodSpec.Volumes = volumes
+	volumePodSpec.Volumes = append(volumes, topologySpec.Volumes...)
 
 	dep := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -504,6 +504,9 @@ func buildTopologyPodSpec(m *seaweedv1.Seaweed, topologySpec *seaweedv1.VolumeTo
 		podSpec.HostNetwork = *topologySpec.HostNetwork
 	} else if m.Spec.HostNetwork != nil {
 		podSpec.HostNetwork = *m.Spec.HostNetwork
+	}
+	if podSpec.HostNetwork {
+		podSpec.DNSPolicy = corev1.DNSClusterFirstWithHostNet
 	}
 
 	if sc := getPodSecurityContext(m, topologySpec); sc != nil {
