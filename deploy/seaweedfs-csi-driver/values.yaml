@@ -63,7 +63,7 @@ rdma:
         memory: 1Gi
   workerSidecar:
     enabled: true
-    image: kmbae27/rdma-sidecar:rdma-20260625-8f7c7c26
+    image: kmbae27/rdma-sidecar:rdma-20260625-ef9227f9
     imagePullPolicy: Always
     port: 18082
     debug: true
