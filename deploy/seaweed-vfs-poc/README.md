@@ -206,6 +206,31 @@ microk8s kubectl -n seaweed-vfs-poc wait --for=condition=ready \
 The client pods in `clients-workers.yaml` can be reused because the host mount
 path is unchanged.
 
+### RDMA Daemon Result
+
+Validated on 2026-06-25 against hnode1, hnode2, and hnode3:
+
+- `seaweed-vfs-rdma-node-workers` runs a node-local `swvfs-rdma-daemon` plus a
+  node-local RDMA engine on each worker.
+- `df -h /mnt/seaweedvfs` and `ls -la /mnt/seaweedvfs` complete cleanly after
+  adding daemon support for `STATFS` and empty xattr defaults.
+- The currently installed official `seaweedvfs` module does not set the
+  experimental RDMA hint bits, so the worker POC runs the daemon with
+  `--force-rdma=true`.
+- Cross-node write test:
+  - hnode1 wrote `/mnt/seaweedvfs/rdma-force-poc-1782394300.bin` (256 KiB).
+  - hnode1 daemon logged `RDMA payload write path completed` with
+    `real_rdma=true` and `data_source=remote-rdma-write`.
+  - r7615 volume RDMA engine logged `RDMA GET from peer completed successfully`.
+- Cross-node read test:
+  - hnode2 read the same 256 KiB file written by hnode1.
+  - hnode2 daemon logged `RDMA payload read path completed` with
+    `real_rdma=true` and `data_source=remote-rdma`.
+  - r7615 volume RDMA engine logged `RDMA PUT to peer completed successfully`.
+
+This proves the replacement daemon path can do SeaweedFS read and write payload
+I/O over real RDMA without the old `sw-kd` HTTP proxy layer.
+
 ## RDMA I/O Benchmark Result
 
 Measured on 2026-06-25 with the kernel mount POC path:
