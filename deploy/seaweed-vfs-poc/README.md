@@ -29,6 +29,13 @@ the kernel module should stay focused on VFS integration.
   volume HTTP reads/writes can be tested through the local RDMA proxy.
 - `client-hnode4.yaml`: starts a shell pod on hnode4 with the host mount exposed
   at `/mnt/seaweedvfs`.
+- `host-install-workers-job.yaml`: installs the same v0.1.0 DKMS module and
+  daemon on hnode1, hnode2, and hnode3.
+- `seaweed-vfs-workers.yaml`: runs the kernel mount plus local RDMA proxy on
+  hnode1, hnode2, and hnode3. It reuses the `seaweed-vfs-rdma-proxy` ConfigMap
+  created by `seaweed-vfs-hnode4.yaml`.
+- `clients-workers.yaml`: starts one shell pod on each worker POC node with the
+  host mount exposed at `/mnt/seaweedvfs`.
 
 ## RDMA Proxy Experiment
 
@@ -64,6 +71,28 @@ microk8s kubectl -n seaweed-vfs-poc wait --for=condition=ready pod -l app.kubern
 
 microk8s kubectl apply -f deploy/seaweed-vfs-poc/client-hnode4.yaml
 microk8s kubectl -n seaweed-vfs-poc wait --for=condition=ready pod/seaweed-vfs-client --timeout=3m
+```
+
+For the hnode1-hnode3 expansion, first make sure the CSI mount DaemonSet template
+has `rdma.workerSidecar.enablePayloadRDMA=true`, then delete only the old
+`seaweedfs-mount` pods on those nodes so they pick up the new template. After
+that:
+
+```sh
+microk8s kubectl apply -f deploy/seaweed-vfs-poc/host-install-workers-job.yaml
+microk8s kubectl -n seaweed-vfs-poc wait --for=condition=complete \
+  job/seaweed-vfs-host-install-hnode1 \
+  job/seaweed-vfs-host-install-hnode2 \
+  job/seaweed-vfs-host-install-hnode3 \
+  --timeout=30m
+
+microk8s kubectl apply -f deploy/seaweed-vfs-poc/seaweed-vfs-workers.yaml
+microk8s kubectl -n seaweed-vfs-poc wait --for=condition=ready \
+  pod -l app.kubernetes.io/name=seaweed-vfs-node-workers --timeout=5m
+
+microk8s kubectl apply -f deploy/seaweed-vfs-poc/clients-workers.yaml
+microk8s kubectl -n seaweed-vfs-poc wait --for=condition=ready \
+  pod -l app.kubernetes.io/name=seaweed-vfs-client-worker --timeout=3m
 ```
 
 ## Smoke Test
@@ -128,6 +157,8 @@ mount from hnode4.
 
 ```sh
 microk8s kubectl delete -f deploy/seaweed-vfs-poc/client-hnode4.yaml --ignore-not-found
+microk8s kubectl delete -f deploy/seaweed-vfs-poc/clients-workers.yaml --ignore-not-found
+microk8s kubectl delete -f deploy/seaweed-vfs-poc/seaweed-vfs-workers.yaml --ignore-not-found
 microk8s kubectl delete -f deploy/seaweed-vfs-poc/seaweed-vfs-hnode4.yaml --ignore-not-found
 ```
 

@@ -1,0 +1,106 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: seaweed-vfs-poc
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: seaweed-vfs-client-hnode1
+  namespace: seaweed-vfs-poc
+  labels:
+    app.kubernetes.io/name: seaweed-vfs-client-worker
+    app.kubernetes.io/part-of: seaweed-vfs-poc
+    seaweedfs.io/poc-node: hnode1
+spec:
+  restartPolicy: Never
+  nodeSelector:
+    kubernetes.io/hostname: hnode1
+  tolerations:
+    - operator: Exists
+  containers:
+    - name: shell
+      image: ubuntu:24.04
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/bash
+        - -lc
+      args:
+        - sleep infinity
+      volumeMounts:
+        - name: seaweed-vfs
+          mountPath: /mnt/seaweedvfs
+          mountPropagation: HostToContainer
+  volumes:
+    - name: seaweed-vfs
+      hostPath:
+        path: /var/lib/seaweedfs-vfs/mnt
+        type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: seaweed-vfs-client-hnode2
+  namespace: seaweed-vfs-poc
+  labels:
+    app.kubernetes.io/name: seaweed-vfs-client-worker
+    app.kubernetes.io/part-of: seaweed-vfs-poc
+    seaweedfs.io/poc-node: hnode2
+spec:
+  restartPolicy: Never
+  nodeSelector:
+    kubernetes.io/hostname: hnode2
+  tolerations:
+    - operator: Exists
+  containers:
+    - name: shell
+      image: ubuntu:24.04
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/bash
+        - -lc
+      args:
+        - sleep infinity
+      volumeMounts:
+        - name: seaweed-vfs
+          mountPath: /mnt/seaweedvfs
+          mountPropagation: HostToContainer
+  volumes:
+    - name: seaweed-vfs
+      hostPath:
+        path: /var/lib/seaweedfs-vfs/mnt
+        type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: seaweed-vfs-client-hnode3
+  namespace: seaweed-vfs-poc
+  labels:
+    app.kubernetes.io/name: seaweed-vfs-client-worker
+    app.kubernetes.io/part-of: seaweed-vfs-poc
+    seaweedfs.io/poc-node: hnode3
+spec:
+  restartPolicy: Never
+  nodeSelector:
+    kubernetes.io/hostname: hnode3
+  tolerations:
+    - operator: Exists
+  containers:
+    - name: shell
+      image: ubuntu:24.04
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/bash
+        - -lc
+      args:
+        - sleep infinity
+      volumeMounts:
+        - name: seaweed-vfs
+          mountPath: /mnt/seaweedvfs
+          mountPropagation: HostToContainer
+  volumes:
+    - name: seaweed-vfs
+      hostPath:
+        path: /var/lib/seaweedfs-vfs/mnt
+        type: DirectoryOrCreate
