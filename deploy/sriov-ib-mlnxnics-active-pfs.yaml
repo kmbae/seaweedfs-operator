@@ -16,6 +16,7 @@ spec:
     rootDevices:
       - "0000:c1:00.0"
       - "0000:01:00.1"
+      - "0000:f5:00.0"
   nodeSelector:
     feature.node.kubernetes.io/pci-15b3.present: "true"
 ---
