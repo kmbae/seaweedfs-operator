@@ -95,7 +95,7 @@ rdma:
   mode: hostPF
   registry: kmbae27
   sidecarTag: rdma-20260625-27d16fc1
-  engineTag: rdma-20260625-27d16fc1
+  engineTag: rdma-20260625-e0638484
   imagePullPolicy: Always
   deviceName: mlx5_1
   ucxTls: rc_verbs,ud_verbs,tcp,self
