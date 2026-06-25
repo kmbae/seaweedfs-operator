@@ -49,6 +49,26 @@ microk8s kubectl -n seaweed-vfs-poc exec seaweed-vfs-client -- \
   bash -lc 'set -euo pipefail; df -h /mnt/seaweedvfs; echo kernel-vfs-ok > /mnt/seaweedvfs/kernel-vfs-poc.txt; cat /mnt/seaweedvfs/kernel-vfs-poc.txt'
 ```
 
+## Current Result
+
+Validated on 2026-06-25 against hnode4:
+
+- `seaweedfs-vfs-dkms` and `seaweedfs-vfs` v0.1.0 installed into the hnode4 host.
+- `modinfo seaweedvfs` reports module version `0.1.0` for kernel
+  `6.8.0-124-generic`.
+- `seaweed-vfs-node` is `1/1 Running` and logs:
+  - `connected to kernel module via /dev/seaweedvfs`
+  - `transport: read()/write()`
+  - `mounted SeaweedFS at /var/lib/seaweedfs-vfs/mnt`
+- `seaweed-vfs-client` wrote and read
+  `/mnt/seaweedvfs/kernel-vfs-poc.txt`.
+- The same file is visible from the hnode4 host mount namespace at
+  `/var/lib/seaweedfs-vfs/mnt/kernel-vfs-poc.txt`.
+
+This proves the kernel mount path works on one node. It is still TCP/HTTP from
+`sw-kd` to SeaweedFS volume servers; the daemon-side RDMA data path remains the
+next implementation step.
+
 ## Cleanup
 
 The DaemonSet sets `UNMOUNT_ON_EXIT=1`, so deleting it should unmount the POC
