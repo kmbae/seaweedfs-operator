@@ -41,6 +41,9 @@ rdma:
   volumeSidecarPort: 8081
   volumeNamespace: seaweedfs
   volumeNetworkName: "default/sriov-ib-network"
+  mount:
+    maxConcurrent: 4
+    timeoutMs: 5000
   workerEngine:
     enabled: true
     image: kmbae27/rdma-engine:rdma-20260625-8f7c7c26
@@ -66,6 +69,7 @@ rdma:
     image: kmbae27/rdma-sidecar:rdma-20260625-ef9227f9
     imagePullPolicy: Always
     port: 18082
+    maxConnections: 4
     debug: true
     resources:
       requests:

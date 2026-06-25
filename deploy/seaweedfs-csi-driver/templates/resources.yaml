@@ -234,6 +234,10 @@ spec:
               value: "true"
             - name: RDMA_READ_ONLY
               value: "false"
+            - name: RDMA_MAX_CONCURRENT
+              value: {{ .Values.rdma.mount.maxConcurrent | quote }}
+            - name: RDMA_TIMEOUT_MS
+              value: {{ .Values.rdma.mount.timeoutMs | quote }}
             - name: WEED_REAL_BINARY
               value: "/weed-bin/weed"
             {{ if and .Values.rdma.enabled .Values.rdma.workerEngine.enabled }}
@@ -324,6 +328,8 @@ spec:
             - --volume-server
             - "http://127.0.0.1:8444"
             - --enable-rdma=true
+            - --max-connections
+            - {{ .Values.rdma.workerSidecar.maxConnections | quote }}
             {{ if .Values.rdma.workerSidecar.debug }}
             - --debug
             {{ end }}
