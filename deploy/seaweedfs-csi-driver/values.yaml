@@ -69,7 +69,7 @@ rdma:
     image: kmbae27/rdma-sidecar:rdma-20260625-ef9227f9
     imagePullPolicy: Always
     port: 18082
-    maxConnections: 4
+    maxConnections: 8
     debug: true
     resources:
       requests:
