@@ -197,7 +197,7 @@ HTTP when RDMA is not available, but logs whether the RDMA backend was selected.
 To switch hnode1-hnode3 from the old proxy POC to the daemon POC:
 
 ```sh
-microk8s kubectl delete -f deploy/seaweed-vfs-poc/seaweed-vfs-workers.yaml --ignore-not-found
+microk8s kubectl -n seaweed-vfs-poc delete daemonset seaweed-vfs-node-workers --ignore-not-found
 microk8s kubectl apply -f deploy/seaweed-vfs-poc/seaweed-vfs-rdma-workers.yaml
 microk8s kubectl -n seaweed-vfs-poc wait --for=condition=ready \
   pod -l app.kubernetes.io/name=seaweed-vfs-rdma-node-workers --timeout=5m
