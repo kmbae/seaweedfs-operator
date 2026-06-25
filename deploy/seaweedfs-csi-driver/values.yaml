@@ -52,6 +52,8 @@ rdma:
     socketPath: /tmp/rdma/rdma-engine.sock
     port: 28515
     debug: true
+    realInitRetries: 180
+    realInitRetryIntervalMs: 1000
     multusNetworks: "default/sriov-ib-network"
     resources:
       requests:

@@ -352,6 +352,14 @@ spec:
             - {{ .Values.rdma.workerEngine.socketPath | quote }}
             - --port
             - {{ .Values.rdma.workerEngine.port | quote }}
+            {{ if .Values.rdma.workerEngine.realInitRetries }}
+            - --real-init-retries
+            - {{ .Values.rdma.workerEngine.realInitRetries | quote }}
+            {{ end }}
+            {{ if .Values.rdma.workerEngine.realInitRetryIntervalMs }}
+            - --real-init-retry-interval-ms
+            - {{ .Values.rdma.workerEngine.realInitRetryIntervalMs | quote }}
+            {{ end }}
           env:
             {{ if .Values.rdma.workerEngine.ucxTls }}
             - name: UCX_TLS

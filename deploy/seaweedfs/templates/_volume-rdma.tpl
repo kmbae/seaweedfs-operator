@@ -19,6 +19,14 @@ Usage: {{- include "seaweedfs.rdmaVolumeGroup" . | nindent 4 }}
     - /tmp/rdma/rdma-engine.sock
     - --port
     - {{ .Values.rdma.listenPort | quote }}
+    {{- if .Values.rdma.realInitRetries }}
+    - --real-init-retries
+    - {{ .Values.rdma.realInitRetries | quote }}
+    {{- end }}
+    {{- if .Values.rdma.realInitRetryIntervalMs }}
+    - --real-init-retry-interval-ms
+    - {{ .Values.rdma.realInitRetryIntervalMs | quote }}
+    {{- end }}
   env:
     {{- if eq $rdmaMode "hostPF" }}
     - name: POD_IP
@@ -152,6 +160,14 @@ sidecars:
       - /tmp/rdma/rdma-engine.sock
       - --port
       - {{ .Values.rdma.listenPort | quote }}
+      {{- if .Values.rdma.realInitRetries }}
+      - --real-init-retries
+      - {{ .Values.rdma.realInitRetries | quote }}
+      {{- end }}
+      {{- if .Values.rdma.realInitRetryIntervalMs }}
+      - --real-init-retry-interval-ms
+      - {{ .Values.rdma.realInitRetryIntervalMs | quote }}
+      {{- end }}
     env:
       {{- if eq $rdmaMode "hostPF" }}
       - name: POD_IP

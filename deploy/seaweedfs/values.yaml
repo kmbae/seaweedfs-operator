@@ -104,4 +104,6 @@ rdma:
   mlnxnicResource: nvidia.com/mlnxnics
   hugepages2Mi: 1Gi
   listenPort: 18515
+  realInitRetries: 180
+  realInitRetryIntervalMs: 1000
   volumeServerURL: http://127.0.0.1:8444
