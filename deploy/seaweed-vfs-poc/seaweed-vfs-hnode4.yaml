@@ -1,0 +1,76 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: seaweed-vfs-poc
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: seaweed-vfs-node
+  namespace: seaweed-vfs-poc
+  labels:
+    app.kubernetes.io/name: seaweed-vfs-node
+    app.kubernetes.io/part-of: seaweed-vfs-poc
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: seaweed-vfs-node
+      app.kubernetes.io/part-of: seaweed-vfs-poc
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: seaweed-vfs-node
+        app.kubernetes.io/part-of: seaweed-vfs-poc
+    spec:
+      hostNetwork: true
+      hostPID: true
+      dnsPolicy: ClusterFirstWithHostNet
+      terminationGracePeriodSeconds: 30
+      nodeSelector:
+        kubernetes.io/hostname: hnode4
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: seaweed-vfs
+          image: ghcr.io/seaweedfs/seaweedfs-vfs:0.1.0
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+          env:
+            - name: FILER
+              value: seaweedfs-filer.seaweedfs.svc.cluster.local:18888
+            - name: MNT
+              value: /var/lib/seaweedfs-vfs/mnt
+            - name: UNMOUNT_ON_EXIT
+              value: "1"
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - grep -q ' /var/lib/seaweedfs-vfs/mnt ' /proc/mounts
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 24
+          volumeMounts:
+            - name: host-lib-modules
+              mountPath: /lib/modules
+              readOnly: true
+            - name: host-dev
+              mountPath: /dev
+            - name: host-mount
+              mountPath: /var/lib/seaweedfs-vfs
+              mountPropagation: Bidirectional
+      volumes:
+        - name: host-lib-modules
+          hostPath:
+            path: /lib/modules
+            type: Directory
+        - name: host-dev
+          hostPath:
+            path: /dev
+            type: Directory
+        - name: host-mount
+          hostPath:
+            path: /var/lib/seaweedfs-vfs
+            type: DirectoryOrCreate
