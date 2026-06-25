@@ -3,6 +3,186 @@ kind: Namespace
 metadata:
   name: seaweed-vfs-poc
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: seaweed-vfs-rdma-proxy
+  namespace: seaweed-vfs-poc
+  labels:
+    app.kubernetes.io/name: seaweed-vfs-rdma-proxy
+    app.kubernetes.io/part-of: seaweed-vfs-poc
+data:
+  sw-kd-volume-rdma-proxy.py: |
+    #!/usr/bin/env python3
+    import os
+    import re
+    import sys
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    LISTEN_HOST = os.environ.get("LISTEN_HOST", "127.0.0.1")
+    LISTEN_PORT = int(os.environ.get("LISTEN_PORT", "18083"))
+    RDMA_GATEWAY_URL = os.environ.get("RDMA_GATEWAY_URL", "http://127.0.0.1:18081").rstrip("/")
+    FILE_ID_RE = re.compile(r"^[0-9]+,[0-9A-Fa-f]+$")
+
+    NO_PROXY_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+    def log(message):
+      sys.stderr.write("[swkd-rdma-proxy] %s\n" % message)
+      sys.stderr.flush()
+
+    def parse_target(path, headers):
+      parsed = urllib.parse.urlparse(path)
+      if parsed.scheme and parsed.netloc:
+        return parsed
+      host = headers.get("Host", "")
+      if not host:
+        return None
+      return urllib.parse.urlparse("http://%s%s" % (host, path))
+
+    def file_id_from_path(path):
+      candidate = urllib.parse.unquote(path.lstrip("/")).split("/", 1)[0]
+      return candidate if FILE_ID_RE.match(candidate) else ""
+
+    def range_to_offset_size(range_header):
+      if not range_header:
+        return None, None
+      m = re.match(r"bytes=(\d+)-(\d+)$", range_header.strip())
+      if not m:
+        return None, None
+      start = int(m.group(1))
+      end = int(m.group(2))
+      if end < start:
+        return None, None
+      return start, end - start + 1
+
+    def copy_headers(src, dst):
+      for key, value in src.items():
+        lk = key.lower()
+        if lk in ("host", "proxy-connection", "connection", "content-length"):
+          continue
+        dst.add_header(key, value)
+
+    class Handler(BaseHTTPRequestHandler):
+      protocol_version = "HTTP/1.1"
+
+      def log_message(self, fmt, *args):
+        log("%s - %s" % (self.address_string(), fmt % args))
+
+      def do_HEAD(self):
+        self.forward_or_accelerate()
+
+      def do_GET(self):
+        self.forward_or_accelerate()
+
+      def do_POST(self):
+        self.forward_or_accelerate()
+
+      def do_PUT(self):
+        self.forward_or_accelerate()
+
+      def do_DELETE(self):
+        self.forward_or_accelerate()
+
+      def forward_or_accelerate(self):
+        target = parse_target(self.path, self.headers)
+        if not target:
+          self.send_error(400, "missing absolute URI or Host header")
+          return
+
+        file_id = file_id_from_path(target.path)
+        volume_server = "%s://%s" % (target.scheme or "http", target.netloc)
+        query = urllib.parse.parse_qs(target.query, keep_blank_values=True)
+        body_len = int(self.headers.get("Content-Length", "0") or "0")
+        body = self.rfile.read(body_len) if body_len > 0 else None
+
+        if self.command == "GET" and file_id:
+          offset = query.get("offset", [""])[0]
+          size = query.get("size", [""])[0]
+          if not offset or not size:
+            range_offset, range_size = range_to_offset_size(self.headers.get("Range", ""))
+            if range_offset is not None and range_size is not None:
+              offset = str(range_offset)
+              size = str(range_size)
+          if offset and size:
+            return self.proxy_rdma_read(file_id, volume_server, offset, size)
+
+        if self.command in ("POST", "PUT") and file_id and body:
+          return self.proxy_rdma_write(file_id, volume_server, body)
+
+        return self.forward_original(target, body)
+
+      def proxy_rdma_read(self, file_id, volume_server, offset, size):
+        qs = urllib.parse.urlencode({
+          "file_id": file_id,
+          "volume_server": volume_server,
+          "offset": offset,
+          "size": size,
+        })
+        url = "%s/read?%s" % (RDMA_GATEWAY_URL, qs)
+        log("RDMA read candidate file_id=%s volume_server=%s offset=%s size=%s" % (
+          file_id, volume_server, offset, size))
+        req = urllib.request.Request(url, method="GET")
+        self.respond_from_request(req)
+
+      def proxy_rdma_write(self, file_id, volume_server, body):
+        qs = urllib.parse.urlencode({
+          "file_id": file_id,
+          "volume_server": volume_server,
+        })
+        url = "%s/write?%s" % (RDMA_GATEWAY_URL, qs)
+        log("RDMA write candidate file_id=%s volume_server=%s size=%d" % (
+          file_id, volume_server, len(body)))
+        req = urllib.request.Request(url, data=body, method="POST")
+        req.add_header("Content-Type", self.headers.get("Content-Type", "application/octet-stream"))
+        self.respond_from_request(req)
+
+      def forward_original(self, target, body):
+        url = urllib.parse.urlunparse(target)
+        log("fallback %s %s" % (self.command, url))
+        req = urllib.request.Request(url, data=body, method=self.command)
+        copy_headers(self.headers, req)
+        self.respond_from_request(req)
+
+      def respond_from_request(self, req):
+        try:
+          with NO_PROXY_OPENER.open(req, timeout=120) as resp:
+            data = resp.read()
+            self.send_response(resp.status)
+            self.copy_response_headers(resp.headers, len(data))
+            self.end_headers()
+            if self.command != "HEAD" and data:
+              self.wfile.write(data)
+            log("response status=%s rdma=%s real=%s source=%s bytes=%d" % (
+              resp.status,
+              resp.headers.get("X-RDMA-Used", ""),
+              resp.headers.get("X-Real-RDMA", ""),
+              resp.headers.get("X-Data-Source", ""),
+              len(data)))
+        except urllib.error.HTTPError as err:
+          data = err.read()
+          self.send_response(err.code)
+          self.copy_response_headers(err.headers, len(data))
+          self.end_headers()
+          if self.command != "HEAD" and data:
+            self.wfile.write(data)
+          log("http error status=%s bytes=%d" % (err.code, len(data)))
+        except Exception as exc:
+          self.send_error(502, "proxy request failed: %s" % exc)
+
+      def copy_response_headers(self, headers, body_len):
+        skipped = {"connection", "transfer-encoding", "content-length"}
+        for key, value in headers.items():
+          if key.lower() not in skipped:
+            self.send_header(key, value)
+        self.send_header("Content-Length", str(body_len))
+
+    if __name__ == "__main__":
+      log("listening on %s:%d -> %s" % (LISTEN_HOST, LISTEN_PORT, RDMA_GATEWAY_URL))
+      ThreadingHTTPServer((LISTEN_HOST, LISTEN_PORT), Handler).serve_forever()
+---
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -45,6 +225,10 @@ spec:
               value: "1"
             - name: SEAWEED_DISABLE_ENTERPRISE_MODE
               value: "1"
+            - name: HTTP_PROXY
+              value: http://127.0.0.1:18083
+            - name: http_proxy
+              value: http://127.0.0.1:18083
           readinessProbe:
             exec:
               command:
@@ -63,6 +247,32 @@ spec:
             - name: host-mount
               mountPath: /var/lib/seaweedfs-vfs
               mountPropagation: Bidirectional
+        - name: sw-kd-rdma-proxy
+          image: python:3.12-alpine
+          imagePullPolicy: IfNotPresent
+          command:
+            - python3
+            - /opt/seaweed-vfs-rdma/sw-kd-volume-rdma-proxy.py
+          env:
+            - name: LISTEN_HOST
+              value: 127.0.0.1
+            - name: LISTEN_PORT
+              value: "18083"
+            - name: RDMA_GATEWAY_URL
+              value: http://127.0.0.1:18081
+          ports:
+            - name: swkd-rdma
+              containerPort: 18083
+              protocol: TCP
+          readinessProbe:
+            tcpSocket:
+              port: 18083
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          volumeMounts:
+            - name: rdma-proxy-script
+              mountPath: /opt/seaweed-vfs-rdma
+              readOnly: true
       volumes:
         - name: host-lib-modules
           hostPath:
@@ -76,3 +286,7 @@ spec:
           hostPath:
             path: /var/lib/seaweedfs-vfs
             type: DirectoryOrCreate
+        - name: rdma-proxy-script
+          configMap:
+            name: seaweed-vfs-rdma-proxy
+            defaultMode: 0755

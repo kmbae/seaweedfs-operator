@@ -25,9 +25,33 @@ the kernel module should stay focused on VFS integration.
   `/var/lib/seaweedfs-vfs/mnt` on that host. The POC sets
   `SEAWEED_DISABLE_ENTERPRISE_MODE=1` because `sw-kd` currently requires a
   SeaweedFS Enterprise license check unless explicitly overridden for
-  development.
+  development. It also injects `HTTP_PROXY=http://127.0.0.1:18083` so `sw-kd`
+  volume HTTP reads/writes can be tested through the local RDMA proxy.
 - `client-hnode4.yaml`: starts a shell pod on hnode4 with the host mount exposed
   at `/mnt/seaweedvfs`.
+
+## RDMA Proxy Experiment
+
+`sw-kd` does not expose an RDMA flag. The POC therefore adds a small local HTTP
+proxy in front of its volume-server HTTP path:
+
+```text
+sw-kd -> HTTP_PROXY 127.0.0.1:18083 -> local RDMA gateway 127.0.0.1:18081
+      -> rdma-sidecar/rdma-engine from the existing seaweedfs-mount DaemonSet
+      -> remote volume server
+```
+
+The proxy is conservative:
+
+- Range or `?offset=&size=` `GET /<file_id>` requests are converted to
+  `/read?file_id=...&volume_server=...`.
+- `POST`/`PUT /<file_id>` requests with a body are converted to
+  `/write?file_id=...&volume_server=...`.
+- Anything else is forwarded to the original volume HTTP endpoint unchanged.
+
+If `sw-kd` does not honor `HTTP_PROXY`, this proxy will receive no traffic. In
+that case the next step is a replacement daemon that speaks `/dev/seaweedvfs`
+directly and calls the existing RDMA client from its READ/WRITE handlers.
 
 ## Apply Order
 
