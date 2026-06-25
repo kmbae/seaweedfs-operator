@@ -43,6 +43,8 @@ spec:
               value: /var/lib/seaweedfs-vfs/mnt
             - name: UNMOUNT_ON_EXIT
               value: "1"
+            - name: SEAWEED_DISABLE_ENTERPRISE_MODE
+              value: "1"
           readinessProbe:
             exec:
               command:

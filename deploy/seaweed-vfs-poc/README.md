@@ -22,7 +22,10 @@ the kernel module should stay focused on VFS integration.
   `sw-kd` daemon into the hnode4 host OS through a privileged one-shot Job.
 - `seaweed-vfs-hnode4.yaml`: runs the official node container as a privileged
   DaemonSet on hnode4 and mounts SeaweedFS at
-  `/var/lib/seaweedfs-vfs/mnt` on that host.
+  `/var/lib/seaweedfs-vfs/mnt` on that host. The POC sets
+  `SEAWEED_DISABLE_ENTERPRISE_MODE=1` because `sw-kd` currently requires a
+  SeaweedFS Enterprise license check unless explicitly overridden for
+  development.
 - `client-hnode4.yaml`: starts a shell pod on hnode4 with the host mount exposed
   at `/mnt/seaweedvfs`.
 
