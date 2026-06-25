@@ -65,6 +65,19 @@ data:
           continue
         dst.add_header(key, value)
 
+    def content_length_from_head(target, headers):
+      url = urllib.parse.urlunparse(target)
+      req = urllib.request.Request(url, method="HEAD")
+      copy_headers(headers, req)
+      try:
+        with NO_PROXY_OPENER.open(req, timeout=30) as resp:
+          length = resp.headers.get("Content-Length", "")
+          if resp.status < 400 and length.isdigit() and int(length) > 0:
+            return str(int(length))
+      except Exception as exc:
+        log("HEAD length lookup failed url=%s error=%s" % (url, exc))
+      return ""
+
     class Handler(BaseHTTPRequestHandler):
       protocol_version = "HTTP/1.1"
 
@@ -106,6 +119,10 @@ data:
             if range_offset is not None and range_size is not None:
               offset = str(range_offset)
               size = str(range_size)
+          if not offset and not size:
+            size = content_length_from_head(target, self.headers)
+            if size:
+              offset = "0"
           if offset and size:
             return self.proxy_rdma_read(file_id, volume_server, offset, size)
 

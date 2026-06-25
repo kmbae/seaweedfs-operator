@@ -328,6 +328,9 @@ spec:
             - --volume-server
             - "http://127.0.0.1:8444"
             - --enable-rdma=true
+            {{ if .Values.rdma.workerSidecar.enablePayloadRDMA }}
+            - --enable-payload-rdma=true
+            {{ end }}
             - --max-connections
             - {{ .Values.rdma.workerSidecar.maxConnections | quote }}
             {{ if .Values.rdma.workerSidecar.debug }}

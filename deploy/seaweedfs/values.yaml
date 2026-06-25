@@ -97,6 +97,7 @@ rdma:
   sidecarTag: rdma-20260625-ef9227f9
   engineTag: rdma-20260625-8f7c7c26
   imagePullPolicy: Always
+  enablePayloadRDMA: false
   deviceName: mlx5_1
   ucxTls: rc_verbs,ud_verbs,tcp,self
   ucxNetDevices: ""

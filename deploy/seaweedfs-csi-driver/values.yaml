@@ -70,6 +70,7 @@ rdma:
     imagePullPolicy: Always
     port: 18082
     maxConnections: 8
+    enablePayloadRDMA: false
     debug: true
     resources:
       requests:

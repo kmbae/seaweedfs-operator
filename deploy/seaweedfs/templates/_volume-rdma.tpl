@@ -114,6 +114,9 @@ Usage: {{- include "seaweedfs.rdmaVolumeGroup" . | nindent 4 }}
     {{- end }}
     - --volume-data-dir=/data0
     - --enable-rdma=true
+    {{- if .Values.rdma.enablePayloadRDMA }}
+    - --enable-payload-rdma=true
+    {{- end }}
   ports:
     - name: rdma-http
       containerPort: 8081
@@ -255,6 +258,9 @@ sidecars:
       {{- end }}
       - --volume-data-dir=/data0
       - --enable-rdma=true
+      {{- if .Values.rdma.enablePayloadRDMA }}
+      - --enable-payload-rdma=true
+      {{- end }}
     ports:
       - name: rdma-http
         containerPort: 8081
