@@ -1,0 +1,23 @@
+# NVIDIA Network Operator values for MicroK8s snap paths.
+#
+# The Network Operator 26.1.x chart exposes CNI path settings, while the
+# SR-IOV device-plugin kubelet socket path is fixed at /var/lib/kubelet.
+# On this cluster /var/lib/kubelet is a host symlink to the MicroK8s kubelet
+# root, so the device-plugin socket still resolves correctly.
+sriovNetworkOperator:
+  enabled: true
+
+operator:
+  cniBinDirectory: /var/snap/microk8s/current/opt/cni/bin
+  cniNetworkDirectory: /var/snap/microk8s/current/args/cni-network
+
+sriov-network-operator:
+  operator:
+    cniBinPath: /var/snap/microk8s/current/opt/cni/bin
+  sriovOperatorConfig:
+    configurationMode: systemd
+    featureGates:
+      parallelNicConfig: true
+    configDaemonNodeSelector:
+      beta.kubernetes.io/os: linux
+      network.nvidia.com/operator.mofed.wait: "false"
