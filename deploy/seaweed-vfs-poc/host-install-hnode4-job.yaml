@@ -41,8 +41,9 @@ spec:
               chroot /host /bin/bash -lc '
                 set -euo pipefail
                 export DEBIAN_FRONTEND=noninteractive
-                curl -fsSL https://raw.githubusercontent.com/seaweedfs/artifactory/main/seaweed-vfs/install.sh -o /tmp/seaweed-vfs-install.sh
-                SEAWEEDFS_VFS_RELEASE=vfs-0.1.0 bash /tmp/seaweed-vfs-install.sh
+                install -d -m 0755 /var/tmp/seaweed-vfs-poc
+                curl -fsSL https://raw.githubusercontent.com/seaweedfs/artifactory/main/seaweed-vfs/install.sh -o /var/tmp/seaweed-vfs-poc/install.sh
+                SEAWEEDFS_VFS_RELEASE=vfs-0.1.0 bash /var/tmp/seaweed-vfs-poc/install.sh
                 modinfo seaweedvfs
               '
           volumeMounts:
