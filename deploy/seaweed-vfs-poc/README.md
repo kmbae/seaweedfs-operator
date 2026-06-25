@@ -150,6 +150,32 @@ restarting only the hnode4 `seaweedfs-mount` pod:
 This proves the hnode4 kernel mount POC can perform SeaweedFS read/write payload
 I/O over RDMA through the proxy path.
 
+## Worker Node RDMA Result
+
+Validated on 2026-06-25 against hnode1, hnode2, and hnode3:
+
+- `seaweedfs-mount` was restarted only on hnode1-hnode3 so those pods picked up
+  `rdma.workerSidecar.enablePayloadRDMA=true`; hnode4 was left running.
+- `seaweedfs-vfs-dkms` and `seaweedfs-vfs` v0.1.0 installed successfully on:
+  - hnode1 kernel `6.8.0-124-generic`
+  - hnode2 kernel `6.8.0-124-generic`
+  - hnode3 kernel `6.8.0-106-generic`
+- `seaweed-vfs-node-workers` is `2/2 Running` on all three nodes and mounts
+  `/var/lib/seaweedfs-vfs/mnt`.
+- `seaweed-vfs-client-hnode1`, `seaweed-vfs-client-hnode2`, and
+  `seaweed-vfs-client-hnode3` can access the host mount at `/mnt/seaweedvfs`.
+- Each node wrote a 1 MiB file through the kernel mount, then read a file written
+  by a different node to avoid satisfying the read from local page cache.
+- Worker sidecar logs on hnode1, hnode2, and hnode3 show both:
+  - `RDMA payload write path completed ... real_rdma=true`
+  - `RDMA payload read path completed ... real_rdma=true`
+- r7615 volume RDMA engine logs show actual UCX operations for the worker test:
+  - `RDMA GET from peer completed successfully` for write payload transfer.
+  - `RDMA PUT to peer completed successfully` for read payload transfer.
+
+This proves the kernel mount plus local RDMA proxy path works beyond hnode4 and
+can do cross-node SeaweedFS read/write payload I/O over RDMA on hnode1-hnode3.
+
 ## Cleanup
 
 The DaemonSet sets `UNMOUNT_ON_EXIT=1`, so deleting it should unmount the POC
