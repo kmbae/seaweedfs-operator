@@ -20,8 +20,18 @@ Usage: {{- include "seaweedfs.rdmaVolumeGroup" . | nindent 4 }}
     - --port
     - {{ .Values.rdma.listenPort | quote }}
   env:
+    {{- if eq $rdmaMode "hostPF" }}
+    - name: POD_IP
+      valueFrom:
+        fieldRef:
+          fieldPath: status.podIP
+    {{- end }}
     - name: VOLUME_SERVER_URL
+      {{- if eq $rdmaMode "hostPF" }}
+      value: "http://$(POD_IP):8444"
+      {{- else }}
       value: {{ .Values.rdma.volumeServerURL | quote }}
+      {{- end }}
     - name: RDMA_LISTEN_PORT
       value: {{ .Values.rdma.listenPort | quote }}
     {{- if .Values.rdma.ucxTls }}
@@ -76,10 +86,21 @@ Usage: {{- include "seaweedfs.rdmaVolumeGroup" . | nindent 4 }}
 - name: rdma-sidecar
   image: {{ printf "%s/rdma-sidecar:%s" .Values.rdma.registry .Values.rdma.sidecarTag }}
   imagePullPolicy: {{ .Values.rdma.imagePullPolicy }}
+  {{- if eq $rdmaMode "hostPF" }}
+  env:
+    - name: POD_IP
+      valueFrom:
+        fieldRef:
+          fieldPath: status.podIP
+  {{- end }}
   args:
     - --port=8081
     - --engine-socket=/tmp/rdma/rdma-engine.sock
+    {{- if eq $rdmaMode "hostPF" }}
+    - --volume-server=http://$(POD_IP):8444
+    {{- else }}
     - --volume-server={{ .Values.rdma.volumeServerURL }}
+    {{- end }}
     - --volume-data-dir=/data0
     - --enable-rdma=true
   ports:
@@ -129,8 +150,18 @@ sidecars:
       - --port
       - {{ .Values.rdma.listenPort | quote }}
     env:
+      {{- if eq $rdmaMode "hostPF" }}
+      - name: POD_IP
+        valueFrom:
+          fieldRef:
+            fieldPath: status.podIP
+      {{- end }}
       - name: VOLUME_SERVER_URL
+        {{- if eq $rdmaMode "hostPF" }}
+        value: "http://$(POD_IP):8444"
+        {{- else }}
         value: {{ .Values.rdma.volumeServerURL | quote }}
+        {{- end }}
       - name: RDMA_LISTEN_PORT
         value: {{ .Values.rdma.listenPort | quote }}
       {{- if .Values.rdma.ucxTls }}
@@ -185,10 +216,21 @@ sidecars:
   - name: rdma-sidecar
     image: {{ printf "%s/rdma-sidecar:%s" .Values.rdma.registry .Values.rdma.sidecarTag }}
     imagePullPolicy: {{ .Values.rdma.imagePullPolicy }}
+    {{- if eq $rdmaMode "hostPF" }}
+    env:
+      - name: POD_IP
+        valueFrom:
+          fieldRef:
+            fieldPath: status.podIP
+    {{- end }}
     args:
       - --port=8081
       - --engine-socket=/tmp/rdma/rdma-engine.sock
+      {{- if eq $rdmaMode "hostPF" }}
+      - --volume-server=http://$(POD_IP):8444
+      {{- else }}
       - --volume-server={{ .Values.rdma.volumeServerURL }}
+      {{- end }}
       - --volume-data-dir=/data0
       - --enable-rdma=true
     ports:
