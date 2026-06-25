@@ -95,7 +95,7 @@ rdma:
   mode: hostPF
   registry: kmbae27
   sidecarTag: latest
-  engineTag: ucx
+  engineTag: rdma-20260625-84bc8981
   imagePullPolicy: Always
   deviceName: mlx5_1
   ucxTls: rc_verbs,ud_verbs,tcp,self

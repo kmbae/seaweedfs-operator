@@ -16,7 +16,7 @@ rbac:
 image:
   registry: kmbae27
   repository: seaweedfs-operator
-  tag: "latest"
+  tag: "rdma-20260625-2479a92"
   pullPolicy: Always
 
 replicaCount: 1
