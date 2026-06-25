@@ -93,6 +93,34 @@ This proves the kernel mount path works on one node. It is still TCP/HTTP from
 `sw-kd` to SeaweedFS volume servers; the daemon-side RDMA data path remains the
 next implementation step.
 
+## RDMA Result
+
+Validated on 2026-06-25 after enabling
+`rdma.workerSidecar.enablePayloadRDMA=true` on the CSI mount worker sidecar and
+restarting only the hnode4 `seaweedfs-mount` pod:
+
+- `sw-kd` honors the injected `HTTP_PROXY=http://127.0.0.1:18083`.
+- The proxy converts SeaweedFS volume HTTP writes to the existing RDMA gateway:
+  `POST /write?file_id=...&volume_server=...`.
+- The proxy converts full-file reads by resolving `Content-Length` with `HEAD`
+  and forwarding `GET /read?file_id=...&offset=0&size=...`.
+- hnode4 worker sidecar starts with `enable_payload_rdma=true`.
+- hnode4 worker RDMA engine reports `real_rdma=true`.
+- Write result:
+  - `is_rdma=true`
+  - `real_rdma=true`
+  - `data_source=remote-rdma-write`
+- Read result:
+  - `is_rdma=true`
+  - `real_rdma=true`
+  - `data_source=remote-rdma`
+- r7615 volume RDMA engine logs show actual UCX operations:
+  - `RDMA GET from peer completed successfully` for write payload transfer.
+  - `RDMA PUT to peer completed successfully` for read payload transfer.
+
+This proves the hnode4 kernel mount POC can perform SeaweedFS read/write payload
+I/O over RDMA through the proxy path.
+
 ## Cleanup
 
 The DaemonSet sets `UNMOUNT_ON_EXIT=1`, so deleting it should unmount the POC
