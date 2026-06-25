@@ -41,7 +41,7 @@ spec:
         - operator: Exists
       containers:
         - name: swvfs-rdma-daemon
-          image: kmbae27/rdma-sidecar:swvfs-20260625-d49cd93ff
+          image: kmbae27/rdma-sidecar:swvfs-20260625-6805d390f
           imagePullPolicy: Always
           securityContext:
             privileged: true
@@ -92,6 +92,7 @@ spec:
                 --enable-read-rdma=true \
                 --enable-write-rdma=true \
                 --enable-payload-rdma=true \
+                --force-rdma=true \
                 --fallback-on-error=true \
                 --timeout=300s \
                 --max-connections=8 \
