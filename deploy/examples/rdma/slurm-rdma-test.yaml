@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rdma-test-pvc
+  namespace: slurm
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: seaweedfs-storage
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rdma-test-pod
+  namespace: slurm
+spec:
+  restartPolicy: Never
+  nodeSelector:
+    kubernetes.io/hostname: r7615
+  containers:
+    - name: tester
+      image: busybox:1.36
+      imagePullPolicy: IfNotPresent
+      command:
+        - sh
+        - -c
+        - sleep infinity
+      volumeMounts:
+        - name: seaweedfs
+          mountPath: /mnt/seaweedfs
+  volumes:
+    - name: seaweedfs
+      persistentVolumeClaim:
+        claimName: rdma-test-pvc
