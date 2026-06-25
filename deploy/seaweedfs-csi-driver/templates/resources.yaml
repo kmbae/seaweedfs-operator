@@ -283,6 +283,8 @@ spec:
               value: "127.0.0.1"
             - name: RDMA_GATEWAY_PORT
               value: {{ .Values.rdma.gatewayPort | quote }}
+            - name: RDMA_REQUEST_TIMEOUT
+              value: {{ .Values.rdma.gatewayTimeout | quote }}
             - name: RDMA_VOLUME_NAMESPACE
               value: {{ .Values.rdma.volumeNamespace | quote }}
             - name: RDMA_NETWORK_NAME
@@ -333,6 +335,8 @@ spec:
             {{ end }}
             - --max-connections
             - {{ .Values.rdma.workerSidecar.maxConnections | quote }}
+            - --timeout
+            - {{ .Values.rdma.workerSidecar.timeout | quote }}
             {{ if .Values.rdma.workerSidecar.debug }}
             - --debug
             {{ end }}

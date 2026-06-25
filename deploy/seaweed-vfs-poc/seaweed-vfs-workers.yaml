@@ -89,6 +89,12 @@ spec:
               value: "18083"
             - name: RDMA_GATEWAY_URL
               value: http://127.0.0.1:18081
+            - name: RDMA_REQUEST_TIMEOUT
+              value: "300"
+            - name: RDMA_READ_CONCURRENCY
+              value: "8"
+            - name: RDMA_WRITE_CONCURRENCY
+              value: "4"
           ports:
             - name: swkd-rdma
               containerPort: 18083

@@ -14,9 +14,11 @@ metadata:
 data:
   sw-kd-volume-rdma-proxy.py: |
     #!/usr/bin/env python3
+    import json
     import os
     import re
     import sys
+    import threading
     import urllib.error
     import urllib.parse
     import urllib.request
@@ -25,9 +27,15 @@ data:
     LISTEN_HOST = os.environ.get("LISTEN_HOST", "127.0.0.1")
     LISTEN_PORT = int(os.environ.get("LISTEN_PORT", "18083"))
     RDMA_GATEWAY_URL = os.environ.get("RDMA_GATEWAY_URL", "http://127.0.0.1:18081").rstrip("/")
+    RDMA_REQUEST_TIMEOUT = float(os.environ.get("RDMA_REQUEST_TIMEOUT", "300"))
+    RDMA_HEAD_TIMEOUT = float(os.environ.get("RDMA_HEAD_TIMEOUT", "30"))
+    RDMA_READ_CONCURRENCY = max(1, int(os.environ.get("RDMA_READ_CONCURRENCY", "8")))
+    RDMA_WRITE_CONCURRENCY = max(1, int(os.environ.get("RDMA_WRITE_CONCURRENCY", "4")))
     FILE_ID_RE = re.compile(r"^[0-9]+,[0-9A-Fa-f]+$")
 
     NO_PROXY_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    READ_SEMAPHORE = threading.BoundedSemaphore(RDMA_READ_CONCURRENCY)
+    WRITE_SEMAPHORE = threading.BoundedSemaphore(RDMA_WRITE_CONCURRENCY)
 
     def log(message):
       sys.stderr.write("[swkd-rdma-proxy] %s\n" % message)
@@ -70,7 +78,7 @@ data:
       req = urllib.request.Request(url, method="HEAD")
       copy_headers(headers, req)
       try:
-        with NO_PROXY_OPENER.open(req, timeout=30) as resp:
+        with NO_PROXY_OPENER.open(req, timeout=RDMA_HEAD_TIMEOUT) as resp:
           length = resp.headers.get("Content-Length", "")
           if resp.status < 400 and length.isdigit() and int(length) > 0:
             return str(int(length))
@@ -142,7 +150,8 @@ data:
         log("RDMA read candidate file_id=%s volume_server=%s offset=%s size=%s" % (
           file_id, volume_server, offset, size))
         req = urllib.request.Request(url, method="GET")
-        self.respond_from_request(req)
+        with READ_SEMAPHORE:
+          self.respond_from_request(req)
 
       def proxy_rdma_write(self, file_id, volume_server, body):
         qs = urllib.parse.urlencode({
@@ -154,7 +163,8 @@ data:
           file_id, volume_server, len(body)))
         req = urllib.request.Request(url, data=body, method="POST")
         req.add_header("Content-Type", self.headers.get("Content-Type", "application/octet-stream"))
-        self.respond_from_request(req)
+        with WRITE_SEMAPHORE:
+          self.respond_from_request(req)
 
       def forward_original(self, target, body):
         url = urllib.parse.urlunparse(target)
@@ -165,18 +175,19 @@ data:
 
       def respond_from_request(self, req):
         try:
-          with NO_PROXY_OPENER.open(req, timeout=120) as resp:
+          with NO_PROXY_OPENER.open(req, timeout=RDMA_REQUEST_TIMEOUT) as resp:
             data = resp.read()
             self.send_response(resp.status)
             self.copy_response_headers(resp.headers, len(data))
             self.end_headers()
             if self.command != "HEAD" and data:
               self.wfile.write(data)
+            rdma_used, real_rdma, data_source = self.rdma_fields(resp.headers, data)
             log("response status=%s rdma=%s real=%s source=%s bytes=%d" % (
               resp.status,
-              resp.headers.get("X-RDMA-Used", ""),
-              resp.headers.get("X-Real-RDMA", ""),
-              resp.headers.get("X-Data-Source", ""),
+              rdma_used,
+              real_rdma,
+              data_source,
               len(data)))
         except urllib.error.HTTPError as err:
           data = err.read()
@@ -196,8 +207,32 @@ data:
             self.send_header(key, value)
         self.send_header("Content-Length", str(body_len))
 
+      def rdma_fields(self, headers, data):
+        rdma_used = headers.get("X-RDMA-Used", "")
+        real_rdma = headers.get("X-Real-RDMA", "")
+        data_source = headers.get("X-Data-Source", "")
+        content_type = headers.get("Content-Type", "")
+        if data and "application/json" in content_type.lower():
+          try:
+            payload = json.loads(data.decode("utf-8"))
+            rdma_used = rdma_used or self.stringify_json_field(payload.get("is_rdma"))
+            real_rdma = real_rdma or self.stringify_json_field(payload.get("real_rdma"))
+            data_source = data_source or self.stringify_json_field(payload.get("data_source"))
+          except Exception:
+            pass
+        return rdma_used, real_rdma, data_source
+
+      def stringify_json_field(self, value):
+        if value is None:
+          return ""
+        if isinstance(value, bool):
+          return "true" if value else "false"
+        return str(value)
+
     if __name__ == "__main__":
-      log("listening on %s:%d -> %s" % (LISTEN_HOST, LISTEN_PORT, RDMA_GATEWAY_URL))
+      log("listening on %s:%d -> %s timeout=%ss read_concurrency=%d write_concurrency=%d" % (
+        LISTEN_HOST, LISTEN_PORT, RDMA_GATEWAY_URL, RDMA_REQUEST_TIMEOUT,
+        RDMA_READ_CONCURRENCY, RDMA_WRITE_CONCURRENCY))
       ThreadingHTTPServer((LISTEN_HOST, LISTEN_PORT), Handler).serve_forever()
 ---
 apiVersion: apps/v1
@@ -277,6 +312,12 @@ spec:
               value: "18083"
             - name: RDMA_GATEWAY_URL
               value: http://127.0.0.1:18081
+            - name: RDMA_REQUEST_TIMEOUT
+              value: "300"
+            - name: RDMA_READ_CONCURRENCY
+              value: "8"
+            - name: RDMA_WRITE_CONCURRENCY
+              value: "4"
           ports:
             - name: swkd-rdma
               containerPort: 18083

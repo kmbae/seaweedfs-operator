@@ -38,6 +38,7 @@ rdma:
   gatewayImage: python:3.12-alpine
   configMapName: seaweedfs-csi-rdma
   gatewayPort: 18081
+  gatewayTimeout: 300
   volumeSidecarPort: 8081
   volumeNamespace: seaweedfs
   volumeNetworkName: "default/sriov-ib-network"
@@ -46,7 +47,7 @@ rdma:
     timeoutMs: 5000
   workerEngine:
     enabled: true
-    image: kmbae27/rdma-engine:rdma-20260625-8f7c7c26
+    image: kmbae27/rdma-engine:rdma-20260625-7a683fa9f
     imagePullPolicy: Always
     deviceName: ""
     ucxTls: rc_verbs,ud_verbs,tcp,self
@@ -66,10 +67,11 @@ rdma:
         memory: 1Gi
   workerSidecar:
     enabled: true
-    image: kmbae27/rdma-sidecar:rdma-20260625-ef9227f9
+    image: kmbae27/rdma-sidecar:rdma-20260625-7a683fa9f
     imagePullPolicy: Always
     port: 18082
     maxConnections: 8
+    timeout: 300s
     enablePayloadRDMA: false
     debug: true
     resources:

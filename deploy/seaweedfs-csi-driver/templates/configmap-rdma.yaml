@@ -128,6 +128,7 @@ data:
     SIDECAR_PORT = int(os.environ.get("RDMA_SIDECAR_PORT", "8081"))
     LISTEN_HOST = os.environ.get("RDMA_GATEWAY_HOST", "127.0.0.1")
     LISTEN_PORT = int(os.environ.get("RDMA_GATEWAY_PORT", "18081"))
+    RDMA_REQUEST_TIMEOUT = float(os.environ.get("RDMA_REQUEST_TIMEOUT", "300"))
     RDMA_VOLUME_NAMESPACE = os.environ.get("RDMA_VOLUME_NAMESPACE", "seaweedfs")
     RDMA_NETWORK_NAME = os.environ.get("RDMA_NETWORK_NAME", "")
     RDMA_WORKER_SIDECAR_URL = os.environ.get("RDMA_WORKER_SIDECAR_URL", "").rstrip("/")
@@ -317,7 +318,7 @@ data:
                     req.add_header(header, self.headers[header])
 
             try:
-                with urllib.request.urlopen(req, timeout=120) as resp:
+                with urllib.request.urlopen(req, timeout=RDMA_REQUEST_TIMEOUT) as resp:
                     data = resp.read()
                     self.send_response(resp.status)
                     for key, value in resp.headers.items():
