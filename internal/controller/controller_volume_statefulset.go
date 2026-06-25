@@ -37,7 +37,11 @@ func buildVolumeServerStartupScriptWithTopology(m *seaweedv1.Seaweed, dirs []str
 		commands = append(commands, "-max=0")
 	}
 
-	commands = append(commands, fmt.Sprintf("-ip=$(POD_NAME).%s-volume-%s-peer.%s", m.Name, topologyName, m.Namespace))
+	if isTopologyHostNetwork(m, topologySpec) {
+		commands = append(commands, "-ip=$(POD_IP)")
+	} else {
+		commands = append(commands, fmt.Sprintf("-ip=$(POD_NAME).%s-volume-%s-peer.%s", m.Name, topologyName, m.Namespace))
+	}
 	if m.Spec.HostSuffix != nil && *m.Spec.HostSuffix != "" {
 		commands = append(commands, fmt.Sprintf("-publicUrl=$(POD_NAME).%s", *m.Spec.HostSuffix))
 	}
@@ -92,7 +96,11 @@ func buildVolumeServerStartupScript(m *seaweedv1.Seaweed, dirs []string, extraAr
 	} else {
 		commands = append(commands, "-max=0")
 	}
-	commands = append(commands, fmt.Sprintf("-ip=$(POD_NAME).%s-volume-peer.%s", m.Name, m.Namespace))
+	if m.BaseVolumeSpec().HostNetwork() {
+		commands = append(commands, "-ip=$(POD_IP)")
+	} else {
+		commands = append(commands, fmt.Sprintf("-ip=$(POD_NAME).%s-volume-peer.%s", m.Name, m.Namespace))
+	}
 	if m.Spec.HostSuffix != nil && *m.Spec.HostSuffix != "" {
 		commands = append(commands, fmt.Sprintf("-publicUrl=$(POD_NAME).%s", *m.Spec.HostSuffix))
 	}
@@ -514,6 +522,16 @@ func buildTopologyPodSpec(m *seaweedv1.Seaweed, topologySpec *seaweedv1.VolumeTo
 	}
 
 	return podSpec
+}
+
+func isTopologyHostNetwork(m *seaweedv1.Seaweed, topologySpec *seaweedv1.VolumeTopologySpec) bool {
+	if topologySpec.HostNetwork != nil {
+		return *topologySpec.HostNetwork
+	}
+	if m.Spec.HostNetwork != nil {
+		return *m.Spec.HostNetwork
+	}
+	return false
 }
 
 // getPodSecurityContext resolves the pod-level securityContext for a topology
