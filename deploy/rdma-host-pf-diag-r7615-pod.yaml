@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: rdma-host-pf-diag-r7615
+  namespace: default
+  labels:
+    app: rdma-host-pf-diag
+spec:
+  restartPolicy: Never
+  nodeSelector:
+    kubernetes.io/hostname: r7615
+  hostNetwork: true
+  hostPID: true
+  containers:
+    - name: diag
+      image: kmbae27/opensm:rdma-20260624-upstream-3.3.24
+      imagePullPolicy: IfNotPresent
+      command:
+        - sh
+        - -c
+        - sleep infinity
+      securityContext:
+        privileged: true
+        capabilities:
+          add:
+            - IPC_LOCK
+            - NET_ADMIN
+            - SYS_ADMIN
+      volumeMounts:
+        - name: dev-infiniband
+          mountPath: /dev/infiniband
+        - name: host-sys
+          mountPath: /host-sys
+          readOnly: true
+        - name: host-run-udev
+          mountPath: /run/udev
+          readOnly: true
+  volumes:
+    - name: dev-infiniband
+      hostPath:
+        path: /dev/infiniband
+        type: Directory
+    - name: host-sys
+      hostPath:
+        path: /sys
+        type: Directory
+    - name: host-run-udev
+      hostPath:
+        path: /run/udev
+        type: DirectoryOrCreate
