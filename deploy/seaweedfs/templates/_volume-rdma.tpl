@@ -48,6 +48,8 @@ Usage: {{- include "seaweedfs.rdmaVolumeGroup" . | nindent 4 }}
   securityContext:
     {{- if eq $rdmaMode "hostPF" }}
     privileged: true
+    runAsUser: 0
+    runAsGroup: 0
     {{- end }}
     capabilities:
       add:
@@ -55,6 +57,7 @@ Usage: {{- include "seaweedfs.rdmaVolumeGroup" . | nindent 4 }}
         {{- if eq $rdmaMode "hostPF" }}
         - NET_ADMIN
         - SYS_ADMIN
+        - SYS_RESOURCE
         {{- end }}
   resources:
     {{- if eq $rdmaMode "hostPF" }}
@@ -178,6 +181,8 @@ sidecars:
     securityContext:
       {{- if eq $rdmaMode "hostPF" }}
       privileged: true
+      runAsUser: 0
+      runAsGroup: 0
       {{- end }}
       capabilities:
         add:
@@ -185,6 +190,7 @@ sidecars:
           {{- if eq $rdmaMode "hostPF" }}
           - NET_ADMIN
           - SYS_ADMIN
+          - SYS_RESOURCE
           {{- end }}
     resources:
       {{- if eq $rdmaMode "hostPF" }}
