@@ -176,6 +176,52 @@ Validated on 2026-06-25 against hnode1, hnode2, and hnode3:
 This proves the kernel mount plus local RDMA proxy path works beyond hnode4 and
 can do cross-node SeaweedFS read/write payload I/O over RDMA on hnode1-hnode3.
 
+## RDMA I/O Benchmark Result
+
+Measured on 2026-06-25 with the kernel mount POC path:
+
+```text
+hnode2 seaweedvfs mount -> sw-kd HTTP proxy -> local RDMA gateway
+  -> hnode2 worker rdma-sidecar/rdma-engine
+  -> r7615 volume rdma-engine/volume server
+```
+
+Reads were run from hnode3 against files written by hnode2 to reduce local page
+cache effects. `seaweedvfs` currently rejects `O_DIRECT`, so fio
+`--direct=1` is not usable on this mount. Buffered fio sequential write also
+exposes a current stability limit rather than a clean throughput number:
+
+- `fio --direct=1`: fails with `destination does not support O_DIRECT`.
+- `fio` 256 MiB sequential write: failed around 33 MiB with
+  `Connection timed out`.
+- `fio` 16 MiB sequential write with fsync: failed at final sync with
+  `Connection timed out`.
+- 8 MiB single-file repeated write: first file completed in 146.039 ms, second
+  file failed at fsync with `Input/output error`.
+
+Stable microbenchmarks that completed:
+
+| Operation | Unit | Count | Avg Latency | Throughput |
+| --- | ---: | ---: | ---: | ---: |
+| write | 1 MiB | 10 | 99.668 ms | 10.03 MiB/s |
+| read | 1 MiB | 10 | 89.834 ms | 11.13 MiB/s |
+| write | 4 MiB | 5 | 97.411 ms | 41.06 MiB/s |
+| read | 4 MiB | 5 | 85.075 ms | 47.02 MiB/s |
+
+The benchmark traffic was RDMA-backed:
+
+- hnode2 proxy logs show `RDMA write candidate` for the 1 MiB and 4 MiB writes.
+- hnode3 proxy logs show read responses with `rdma=true real=true
+  source=remote-rdma`.
+- r7615 volume RDMA engine logs show `RDMA GET from peer completed
+  successfully` for writes and `RDMA PUT to peer completed successfully` for
+  reads.
+
+This means the POC is functionally RDMA-backed, but it is not yet a production
+benchmark path. The current limiting factors are the proxy/sidecar handling of
+larger buffered write/fsync workloads, lack of `O_DIRECT` support in
+`seaweedvfs`, and per-object overhead that dominates small I/O.
+
 ## Cleanup
 
 The DaemonSet sets `UNMOUNT_ON_EXIT=1`, so deleting it should unmount the POC
