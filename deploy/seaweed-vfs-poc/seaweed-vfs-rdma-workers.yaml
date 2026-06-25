@@ -1,0 +1,204 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: seaweed-vfs-poc
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: seaweed-vfs-rdma-node-workers
+  namespace: seaweed-vfs-poc
+  labels:
+    app.kubernetes.io/name: seaweed-vfs-rdma-node-workers
+    app.kubernetes.io/part-of: seaweed-vfs-poc
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: seaweed-vfs-rdma-node-workers
+      app.kubernetes.io/part-of: seaweed-vfs-poc
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: seaweed-vfs-rdma-node-workers
+        app.kubernetes.io/part-of: seaweed-vfs-poc
+    spec:
+      hostNetwork: true
+      hostPID: true
+      dnsPolicy: ClusterFirstWithHostNet
+      terminationGracePeriodSeconds: 30
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values:
+                      - hnode1
+                      - hnode2
+                      - hnode3
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: swvfs-rdma-daemon
+          image: kmbae27/rdma-sidecar:swvfs-20260625-d89a465a8
+          imagePullPolicy: Always
+          securityContext:
+            privileged: true
+            allowPrivilegeEscalation: true
+            runAsUser: 0
+            runAsGroup: 0
+            capabilities:
+              add:
+                - SYS_ADMIN
+                - SYS_RESOURCE
+                - IPC_LOCK
+          command:
+            - /bin/sh
+            - -lc
+          args:
+            - |
+              set -eu
+              MNT="${MNT:-/var/lib/seaweedfs-vfs/mnt}"
+              DAEMON=""
+
+              term() {
+                if [ "${UNMOUNT_ON_EXIT:-1}" = "1" ]; then
+                  echo "unmounting ${MNT}"
+                  umount "${MNT}" 2>/dev/null || umount -l "${MNT}" 2>/dev/null || true
+                fi
+                if [ -n "${DAEMON}" ]; then
+                  kill "${DAEMON}" 2>/dev/null || true
+                fi
+                exit 0
+              }
+              trap term TERM INT
+
+              modprobe seaweedvfs 2>/dev/null || true
+              i=0
+              while [ ! -e /dev/seaweedvfs ] && [ "${i}" -lt 100 ]; do
+                i=$((i + 1))
+                sleep 0.1
+              done
+              [ -e /dev/seaweedvfs ] || {
+                echo "ERROR: /dev/seaweedvfs is not available" >&2
+                exit 1
+              }
+
+              /app/swvfs-rdma-daemon \
+                --dev=/dev/seaweedvfs \
+                --filer=seaweedfs-filer.seaweedfs.svc.cluster.local:8888 \
+                --engine-socket=/tmp/rdma/rdma-engine.sock \
+                --enable-read-rdma=true \
+                --enable-write-rdma=true \
+                --enable-payload-rdma=true \
+                --fallback-on-error=true \
+                --timeout=300s \
+                --max-connections=8 \
+                --debug &
+              DAEMON=$!
+
+              i=0
+              while ! fuser /dev/seaweedvfs >/dev/null 2>&1 && [ "${i}" -lt 100 ]; do
+                kill -0 "${DAEMON}" 2>/dev/null || {
+                  echo "swvfs-rdma-daemon exited before attaching to /dev/seaweedvfs" >&2
+                  exit 1
+                }
+                i=$((i + 1))
+                sleep 0.1
+              done
+
+              mkdir -p "${MNT}"
+              if grep -q " ${MNT} " /proc/mounts; then
+                echo "already mounted at ${MNT}; attached RDMA daemon"
+              else
+                mount -t seaweedvfs none "${MNT}"
+                echo "mounted SeaweedFS RDMA VFS at ${MNT}"
+              fi
+
+              wait "${DAEMON}"
+          env:
+            - name: MNT
+              value: /var/lib/seaweedfs-vfs/mnt
+            - name: UNMOUNT_ON_EXIT
+              value: "1"
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - grep -q ' /var/lib/seaweedfs-vfs/mnt ' /proc/mounts
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 24
+          volumeMounts:
+            - name: host-lib-modules
+              mountPath: /lib/modules
+              readOnly: true
+            - name: host-dev
+              mountPath: /dev
+            - name: host-mount
+              mountPath: /var/lib/seaweedfs-vfs
+              mountPropagation: Bidirectional
+            - name: rdma-socket
+              mountPath: /tmp/rdma
+        - name: rdma-engine
+          image: kmbae27/rdma-engine:rdma-20260625-7a683fa9f
+          imagePullPolicy: Always
+          command:
+            - ./rdma-engine-server
+            - --debug
+            - --ipc-socket
+            - /tmp/rdma/rdma-engine.sock
+            - --port
+            - "38515"
+            - --real-init-retries
+            - "180"
+            - --real-init-retry-interval-ms
+            - "1000"
+          env:
+            - name: UCX_TLS
+              value: rc_verbs,ud_verbs,tcp,self
+            - name: RDMA_LISTEN_PORT
+              value: "38515"
+          ports:
+            - name: rdma-engine
+              containerPort: 38515
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+          securityContext:
+            privileged: true
+            allowPrivilegeEscalation: true
+            runAsUser: 0
+            runAsGroup: 0
+            capabilities:
+              add:
+                - IPC_LOCK
+                - NET_ADMIN
+                - SYS_ADMIN
+                - SYS_RESOURCE
+          volumeMounts:
+            - name: rdma-socket
+              mountPath: /tmp/rdma
+            - name: host-dev
+              mountPath: /dev
+      volumes:
+        - name: host-lib-modules
+          hostPath:
+            path: /lib/modules
+            type: Directory
+        - name: host-dev
+          hostPath:
+            path: /dev
+            type: Directory
+        - name: host-mount
+          hostPath:
+            path: /var/lib/seaweedfs-vfs
+            type: DirectoryOrCreate
+        - name: rdma-socket
+          emptyDir: {}

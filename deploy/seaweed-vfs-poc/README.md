@@ -34,6 +34,10 @@ the kernel module should stay focused on VFS integration.
 - `seaweed-vfs-workers.yaml`: runs the kernel mount plus local RDMA proxy on
   hnode1, hnode2, and hnode3. It reuses the `seaweed-vfs-rdma-proxy` ConfigMap
   created by `seaweed-vfs-hnode4.yaml`.
+- `seaweed-vfs-rdma-workers.yaml`: replaces the proxy experiment on hnode1,
+  hnode2, and hnode3 with an experimental `swvfs-rdma-daemon` that speaks
+  `/dev/seaweedvfs` directly. Each pod also starts a node-local RDMA engine and
+  mounts the same host path, `/var/lib/seaweedfs-vfs/mnt`.
 - `clients-workers.yaml`: starts one shell pod on each worker POC node with the
   host mount exposed at `/mnt/seaweedvfs`.
 
@@ -175,6 +179,32 @@ Validated on 2026-06-25 against hnode1, hnode2, and hnode3:
 
 This proves the kernel mount plus local RDMA proxy path works beyond hnode4 and
 can do cross-node SeaweedFS read/write payload I/O over RDMA on hnode1-hnode3.
+
+## RDMA Daemon Path
+
+The proxy path proved the data plane but kept `sw-kd` in the middle. The next
+worker-node test path removes that layer:
+
+```text
+seaweedvfs.ko -> /dev/seaweedvfs -> swvfs-rdma-daemon
+  -> local rdma-engine -> r7615 volume rdma-engine/volume server
+```
+
+The daemon currently implements the basic metadata calls needed for normal
+directory walking plus READ and WRITE. It intentionally falls back to SeaweedFS
+HTTP when RDMA is not available, but logs whether the RDMA backend was selected.
+
+To switch hnode1-hnode3 from the old proxy POC to the daemon POC:
+
+```sh
+microk8s kubectl delete -f deploy/seaweed-vfs-poc/seaweed-vfs-workers.yaml --ignore-not-found
+microk8s kubectl apply -f deploy/seaweed-vfs-poc/seaweed-vfs-rdma-workers.yaml
+microk8s kubectl -n seaweed-vfs-poc wait --for=condition=ready \
+  pod -l app.kubernetes.io/name=seaweed-vfs-rdma-node-workers --timeout=5m
+```
+
+The client pods in `clients-workers.yaml` can be reused because the host mount
+path is unchanged.
 
 ## RDMA I/O Benchmark Result
 
