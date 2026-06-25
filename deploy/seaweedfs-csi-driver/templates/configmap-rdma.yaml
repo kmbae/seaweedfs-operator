@@ -131,6 +131,7 @@ data:
     RDMA_VOLUME_NAMESPACE = os.environ.get("RDMA_VOLUME_NAMESPACE", "seaweedfs")
     RDMA_NETWORK_NAME = os.environ.get("RDMA_NETWORK_NAME", "")
     RDMA_WORKER_SIDECAR_URL = os.environ.get("RDMA_WORKER_SIDECAR_URL", "").rstrip("/")
+    RDMA_HOSTPF_FALLBACK = os.environ.get("RDMA_HOSTPF_FALLBACK", "false").lower() in ("1", "true", "yes", "on")
     SERVICEACCOUNT_DIR = "/var/run/secrets/kubernetes.io/serviceaccount"
     RDMA_SERVER_CACHE = {}
 
@@ -216,19 +217,30 @@ data:
         return ""
 
 
+    def hostpf_rdma_ip_from_pod_or_host(pod, host: str) -> str:
+        if not RDMA_HOSTPF_FALLBACK:
+            return ""
+        status = ((pod or {}).get("status") or {})
+        return status.get("podIP") or status.get("hostIP") or host
+
+
     def rdma_server_for_volume(volume_server: str) -> str:
-        if not RDMA_NETWORK_NAME:
+        if not RDMA_NETWORK_NAME and not RDMA_HOSTPF_FALLBACK:
             return ""
         host = volume_host(volume_server)
         if host in RDMA_SERVER_CACHE:
             return RDMA_SERVER_CACHE[host]
         pod = pod_from_volume_host(host)
         ip = rdma_ip_from_pod(pod)
+        source = "multus"
+        if not ip:
+            ip = hostpf_rdma_ip_from_pod_or_host(pod, host)
+            source = "hostPF"
         rdma_server = "http://%s" % ip if ip else ""
         RDMA_SERVER_CACHE[host] = rdma_server
         if rdma_server:
             sys.stderr.write(
-                "[rdma-gateway] %s uses RDMA data-plane %s\n" % (volume_server, rdma_server)
+                "[rdma-gateway] %s uses %s RDMA data-plane %s\n" % (volume_server, source, rdma_server)
             )
         return rdma_server
 

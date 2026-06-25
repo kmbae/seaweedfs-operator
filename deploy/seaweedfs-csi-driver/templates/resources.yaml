@@ -283,6 +283,8 @@ spec:
               value: {{ .Values.rdma.volumeNamespace | quote }}
             - name: RDMA_NETWORK_NAME
               value: {{ .Values.rdma.volumeNetworkName | quote }}
+            - name: RDMA_HOSTPF_FALLBACK
+              value: {{ if eq (default "sriov" .Values.rdma.mode) "hostPF" }}"true"{{ else }}"false"{{ end }}
             {{ if and .Values.rdma.enabled .Values.rdma.workerEngine.enabled .Values.rdma.workerSidecar.enabled }}
             - name: RDMA_WORKER_SIDECAR_URL
               value: "http://127.0.0.1:{{ .Values.rdma.workerSidecar.port }}"
