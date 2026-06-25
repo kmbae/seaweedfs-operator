@@ -1,0 +1,7 @@
+# Runtime-only operator image. Build `./manager` on the host first when Docker
+# build-stage dependency downloads are unreliable.
+FROM gcr.io/distroless/static:nonroot
+WORKDIR /
+COPY manager .
+USER 65532:65532
+ENTRYPOINT ["/manager"]
