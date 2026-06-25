@@ -43,7 +43,7 @@ rdma:
   volumeNetworkName: "default/sriov-ib-network"
   workerEngine:
     enabled: true
-    image: kmbae27/rdma-engine:rdma-20260625-754518df
+    image: kmbae27/rdma-engine:rdma-20260625-3e8ce48d
     imagePullPolicy: Always
     deviceName: mlx5_1
     ucxTls: rc_verbs,ud_verbs,tcp,self
