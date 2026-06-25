@@ -265,8 +265,11 @@ spec:
               containerPort: 18083
               protocol: TCP
           readinessProbe:
-            tcpSocket:
-              port: 18083
+            exec:
+              command:
+                - python3
+                - -c
+                - "import socket; s=socket.create_connection(('127.0.0.1', 18083), 1); s.close()"
             initialDelaySeconds: 2
             periodSeconds: 5
           volumeMounts:
