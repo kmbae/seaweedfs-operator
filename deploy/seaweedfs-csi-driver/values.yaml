@@ -45,7 +45,7 @@ rdma:
     enabled: true
     image: kmbae27/rdma-engine:rdma-20260625-7f092413
     imagePullPolicy: Always
-    deviceName: mlx5_1
+    deviceName: ""
     ucxTls: rc_verbs,ud_verbs,tcp,self
     ucxNetDevices: ""
     socketDir: /tmp/rdma
