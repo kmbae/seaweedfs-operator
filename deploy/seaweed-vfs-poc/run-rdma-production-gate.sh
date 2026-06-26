@@ -1,0 +1,226 @@
+#!/usr/bin/env bash
+# Validate the Seaweed VFS RDMA data path with smoke I/O, fio, pjdfstest, and
+# a daemon restart failover check.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+NS="${NS:-seaweed-vfs-poc}"
+SEAWEED_NS="${SEAWEED_NS:-seaweedfs}"
+CLIENT_LABEL="${CLIENT_LABEL:-app.kubernetes.io/name=seaweed-vfs-client-worker}"
+WORKER_LABEL="${WORKER_LABEL:-app.kubernetes.io/name=seaweed-vfs-rdma-node-workers}"
+CLIENT_CONTAINER="${CLIENT_CONTAINER:-shell}"
+WORKER_CONTAINER="${WORKER_CONTAINER:-swvfs-rdma-daemon}"
+VOLUME_POD="${VOLUME_POD:-seaweedfs-volume-r7615-0}"
+VOLUME_CONTAINER="${VOLUME_CONTAINER:-rdma-engine}"
+CLIENT_MOUNT="${CLIENT_MOUNT:-/mnt/seaweedvfs}"
+WORKER_MOUNT="${WORKER_MOUNT:-/var/lib/seaweedfs-vfs/mnt}"
+WRITER_NODE="${WRITER_NODE:-hnode1}"
+READER_NODES="${READER_NODES:-hnode2 hnode3}"
+FAILOVER_NODE="${FAILOVER_NODE:-hnode2}"
+SMOKE_SIZE_MB="${SMOKE_SIZE_MB:-64}"
+FIO_SIZE="${FIO_SIZE:-256M}"
+RUN_FIO="${RUN_FIO:-true}"
+RUN_PJDFSTEST="${RUN_PJDFSTEST:-true}"
+RUN_FAILOVER="${RUN_FAILOVER:-true}"
+PJDFSTEST_TESTS="${PJDFSTEST_TESTS:-tests/open/25.t tests/unlink/14.t tests/open/26.t tests/mkdir/00.t tests/rename/20.t tests/rename/24.t}"
+
+if command -v kubectl >/dev/null 2>&1; then
+  KUBECTL=(kubectl)
+elif command -v microk8s >/dev/null 2>&1; then
+  KUBECTL=(microk8s kubectl)
+else
+  echo "ERROR: kubectl not found" >&2
+  exit 1
+fi
+
+kctl() { "${KUBECTL[@]}" "$@"; }
+log() { printf '[%s] %s\n' "$(date +%H:%M:%S)" "$*"; }
+die() { echo "ERROR: $*" >&2; exit 1; }
+
+pod_by_node() {
+  local label=$1
+  local node=$2
+  kctl -n "${NS}" get pod \
+    -l "${label}" \
+    --field-selector "spec.nodeName=${node}" \
+    -o jsonpath='{.items[0].metadata.name}' 2>/dev/null
+}
+
+require_pod() {
+  local label=$1
+  local node=$2
+  local pod
+  pod="$(pod_by_node "${label}" "${node}")"
+  [ -n "${pod}" ] || die "no pod for label '${label}' on node '${node}'"
+  printf '%s\n' "${pod}"
+}
+
+client_pod() { require_pod "${CLIENT_LABEL}" "$1"; }
+worker_pod() { require_pod "${WORKER_LABEL}" "$1"; }
+
+exec_client() {
+  local pod=$1
+  shift
+  kctl -n "${NS}" exec "${pod}" -c "${CLIENT_CONTAINER}" -- bash -lc "$*"
+}
+
+exec_worker() {
+  local pod=$1
+  shift
+  kctl -n "${NS}" exec "${pod}" -c "${WORKER_CONTAINER}" -- sh -lc "$*"
+}
+
+wait_for_pod_ready() {
+  local pod=$1
+  kctl -n "${NS}" wait --for=condition=Ready "pod/${pod}" --timeout=180s >/dev/null
+}
+
+assert_client_mount() {
+  local pod=$1
+  exec_client "${pod}" "grep -q ' ${CLIENT_MOUNT} ' /proc/mounts && grep ' ${CLIENT_MOUNT} ' /proc/mounts"
+}
+
+assert_worker_mount() {
+  local pod=$1
+  exec_worker "${pod}" "grep -q ' ${WORKER_MOUNT} ' /proc/mounts && grep ' ${WORKER_MOUNT} ' /proc/mounts"
+}
+
+ensure_fio() {
+  local pod=$1
+  exec_client "${pod}" '
+    set -euo pipefail
+    if [ ! -x /usr/bin/fio ]; then
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update
+      apt-get install -y --no-install-recommends fio ca-certificates coreutils
+    fi
+  '
+}
+
+assert_log_contains() {
+  local haystack=$1
+  local needle=$2
+  local label=$3
+  if ! grep -q "${needle}" <<<"${haystack}"; then
+    echo "--- ${label} logs ---" >&2
+    printf '%s\n' "${haystack}" >&2
+    die "expected '${needle}' in ${label} logs"
+  fi
+}
+
+assert_log_absent() {
+  local haystack=$1
+  local needle=$2
+  local label=$3
+  if grep -q "${needle}" <<<"${haystack}"; then
+    echo "--- ${label} logs ---" >&2
+    printf '%s\n' "${haystack}" >&2
+    die "unexpected '${needle}' in ${label} logs"
+  fi
+}
+
+log "Resolving pods"
+read -r -a reader_nodes <<<"${READER_NODES}"
+writer_client="$(client_pod "${WRITER_NODE}")"
+writer_worker="$(worker_pod "${WRITER_NODE}")"
+failover_client="$(client_pod "${FAILOVER_NODE}")"
+
+reader_clients=()
+reader_workers=()
+for node in "${reader_nodes[@]}"; do
+  reader_clients+=("$(client_pod "${node}")")
+  reader_workers+=("$(worker_pod "${node}")")
+done
+
+log "Checking mounts"
+assert_client_mount "${writer_client}"
+assert_worker_mount "${writer_worker}"
+for pod in "${reader_clients[@]}"; do
+  assert_client_mount "${pod}"
+done
+for pod in "${reader_workers[@]}"; do
+  assert_worker_mount "${pod}"
+done
+
+since_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+test_dir="${CLIENT_MOUNT}/rdma-prod-gate-$(date +%Y%m%d-%H%M%S)"
+smoke_file="${test_dir}/payload.bin"
+fio_file="${test_dir}/fio.bin"
+
+log "Smoke write on ${WRITER_NODE}: ${SMOKE_SIZE_MB}MiB"
+writer_sha="$(
+  exec_client "${writer_client}" "
+    set -euo pipefail
+    mkdir -p '${test_dir}'
+    dd if=/dev/urandom of='${smoke_file}' bs=1M count='${SMOKE_SIZE_MB}' status=none
+    sync '${smoke_file}'
+    sha256sum '${smoke_file}'
+  " | awk '{print $1}'
+)"
+[ -n "${writer_sha}" ] || die "failed to compute writer checksum"
+log "Writer checksum: ${writer_sha}"
+
+for i in "${!reader_clients[@]}"; do
+  node="${reader_nodes[$i]}"
+  pod="${reader_clients[$i]}"
+  log "Smoke read on ${node}"
+  reader_sha="$(exec_client "${pod}" "sha256sum '${smoke_file}'" | awk '{print $1}')"
+  [ "${reader_sha}" = "${writer_sha}" ] || die "checksum mismatch on ${node}: ${reader_sha} != ${writer_sha}"
+done
+
+if [ "${RUN_FIO}" = "true" ]; then
+  log "Running fio (${FIO_SIZE})"
+  ensure_fio "${writer_client}"
+  ensure_fio "${reader_clients[0]}"
+  exec_client "${writer_client}" "
+    set -euo pipefail
+    /usr/bin/fio --name=rdma-seqwrite --filename='${fio_file}' --size='${FIO_SIZE}' \
+      --rw=write --bs=8M --ioengine=sync --direct=0 --iodepth=1 --numjobs=1 \
+      --group_reporting --fsync_on_close=1
+  "
+  exec_client "${reader_clients[0]}" "
+    set -euo pipefail
+    /usr/bin/fio --name=rdma-seqread --filename='${fio_file}' --size='${FIO_SIZE}' \
+      --rw=read --bs=8M --ioengine=sync --direct=0 --iodepth=1 --numjobs=1 \
+      --group_reporting
+  "
+fi
+
+log "Checking RDMA logs"
+writer_logs="$(kctl -n "${NS}" logs "${writer_worker}" -c "${WORKER_CONTAINER}" --since-time="${since_time}" || true)"
+assert_log_contains "${writer_logs}" "remote-rdma-write:volume-grpc" "${writer_worker}"
+assert_log_contains "${writer_logs}" "real_rdma=true" "${writer_worker}"
+
+for pod in "${reader_workers[@]}"; do
+  logs="$(kctl -n "${NS}" logs "${pod}" -c "${WORKER_CONTAINER}" --since-time="${since_time}" || true)"
+  assert_log_contains "${logs}" "remote-rdma:local-volume-rust" "${pod}"
+  assert_log_contains "${logs}" "real_rdma=true" "${pod}"
+done
+
+volume_logs="$(kctl -n "${SEAWEED_NS}" logs "${VOLUME_POD}" -c "${VOLUME_CONTAINER}" --since-time="${since_time}" || true)"
+assert_log_absent "${volume_logs}" "direct volume gRPC write failed" "${VOLUME_POD}/${VOLUME_CONTAINER}"
+assert_log_contains "${volume_logs}" "RDMA GET from peer completed successfully" "${VOLUME_POD}/${VOLUME_CONTAINER}"
+assert_log_contains "${volume_logs}" "RDMA PUT to peer completed successfully" "${VOLUME_POD}/${VOLUME_CONTAINER}"
+
+if [ "${RUN_PJDFSTEST}" = "true" ]; then
+  log "Running pjdfstest core gate"
+  POD="${writer_client}" \
+    MOUNT_DIR="${CLIENT_MOUNT}" \
+    PJDFSTEST_TESTS="${PJDFSTEST_TESTS}" \
+    "${SCRIPT_DIR}/run-pjdfstest-vfs.sh"
+fi
+
+if [ "${RUN_FAILOVER}" = "true" ]; then
+  log "Restarting RDMA worker on ${FAILOVER_NODE}"
+  old_worker="$(worker_pod "${FAILOVER_NODE}")"
+  kctl -n "${NS}" delete pod "${old_worker}" --wait=true
+  kctl -n "${NS}" rollout status daemonset/seaweed-vfs-rdma-node-workers --timeout=300s
+  new_worker="$(worker_pod "${FAILOVER_NODE}")"
+  wait_for_pod_ready "${new_worker}"
+  assert_worker_mount "${new_worker}"
+  failover_sha="$(exec_client "${failover_client}" "sha256sum '${smoke_file}'" | awk '{print $1}')"
+  [ "${failover_sha}" = "${writer_sha}" ] || die "checksum mismatch after failover: ${failover_sha} != ${writer_sha}"
+fi
+
+log "Production gate passed"

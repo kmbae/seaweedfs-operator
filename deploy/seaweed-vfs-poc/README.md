@@ -470,9 +470,71 @@ write_elapsed_ms=460
 read_elapsed_ms=330
 ```
 
-This is an improvement, not the production RDMA endpoint. The remaining large
-costs are userspace IPC copies, MessagePack frame copies, per-read 8 MiB
-sessions, and the remote sidecar's HTTP write into the volume server.
+This was an improvement, not the final RDMA endpoint. The next bottlenecks were
+userspace IPC copies, MessagePack frame copies, per-read 8 MiB sessions, and the
+remote sidecar's HTTP write into the volume server.
+
+### Direct Volume gRPC Writes
+
+Validated on 2026-06-27 with RDMA engine image
+`kmbae27/rdma-engine:rdma-20260627-volgrpc-9cb5ef4e` and Helm release
+`seaweedfs` revision 36.
+
+The volume-side RDMA engine now persists remote writes through the SeaweedFS
+volume server gRPC `WriteNeedleBlob` API instead of staging through the local
+sidecar HTTP endpoint. The volume pod exposes `VOLUME_SERVER_GRPC_URL` as
+`http://$(POD_IP):8444`, which maps to the volume server gRPC port.
+
+Corrected cross-node smoke test on the real kernel mount:
+
+```text
+hnode1 write -> hnode2/hnode3 read
+path=/var/lib/seaweedfs-vfs/mnt/rdma-volgrpc-20260627-0441/payload.bin
+size=64 MiB
+sha256=424671d11a5a738b7e26b3223d844b209456325d61f431b7d456cd5224e0f8a0
+```
+
+Logs confirmed:
+
+- Write path: `remote-rdma-write:volume-grpc`, `data_rdma=true`,
+  `real_rdma=true`.
+- Read path: `remote-rdma:local-volume-rust`, `data_rdma=true`,
+  `real_rdma=true`.
+- Volume engine: successful RDMA GET for write ingest and RDMA PUT for reads,
+  with no `direct volume gRPC write failed` fallback.
+
+The remaining large costs are now in kernel module to daemon copies, daemon to
+engine IPC framing/copies, per-request RDMA/session control overhead, and
+SeaweedFS metadata/update semantics. The old remote HTTP staging step is no
+longer on the happy path.
+
+### RDMA Production Gate
+
+The combined gate is:
+
+```sh
+deploy/seaweed-vfs-poc/run-rdma-production-gate.sh
+```
+
+It validates:
+
+- hnode1 write plus hnode2/hnode3 checksum reads on the kernel mount.
+- fio sequential write/read through the RDMA-backed mount.
+- worker and volume logs proving `remote-rdma-write:volume-grpc` and
+  `remote-rdma:local-volume-rust`.
+- `pjdfstest` core POSIX syscall subset.
+- RDMA worker restart failover on hnode2, followed by checksum read.
+
+Current status on 2026-06-27:
+
+```text
+SMOKE_SIZE_MB=64 FIO_SIZE=64M RUN_FIO=true RUN_PJDFSTEST=true RUN_FAILOVER=true
+Result: PASS
+fio write: 86.3 MiB/s
+fio read:  59.0 MiB/s
+pjdfstest: Files=6, Tests=96, Result=PASS
+failover: hnode2 RDMA worker restarted and checksum read passed
+```
 
 ### PJDFSTEST POSIX Gate
 
@@ -512,14 +574,13 @@ The current final POC shape is:
 1. Keep `seaweedvfs` as the long-term mount base so Linux owns VFS caching,
    dentries, inodes, and page cache behavior.
 2. Keep SeaweedFS networking in the userspace daemon, not in the kernel module.
-3. Keep TCP/HTTP fallback as the production default until RDMA beats it on real
-   fio workloads.
+3. Keep TCP/HTTP fallback available until the full fio, `pjdfstest`, and
+   failover matrix passes at production sizes.
 4. Treat RDMA as an opt-in large-I/O backend with `RDMA_READ_MIN_SIZE` and
-   `RDMA_WRITE_MIN_SIZE` thresholds.
+   `RDMA_WRITE_MIN_SIZE` thresholds while the data-plane overhead is reduced.
 5. Make the next RDMA work about protocol shape: persistent sessions,
-   batched/streamed transfers, fewer per-chunk handshakes, and eventually a
-   cleaner zero-copy daemon protocol. Only after that should RDMA become a
-   default path.
+   batched/streamed transfers, fewer per-chunk handshakes, registered
+   daemon/engine buffers, and a cleaner zero-copy-ish daemon protocol.
 
 ## Cleanup
 
