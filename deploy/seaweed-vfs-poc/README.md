@@ -302,6 +302,29 @@ Validated again on 2026-06-26 with RDMA engine image
   safer defaults: `read_rdma=false`, `write_rdma=false`, `payload_rdma=false`,
   `RDMA_READ_MIN_SIZE=8388608`, and `RDMA_WRITE_MIN_SIZE=8388608`.
 
+Validated on 2026-06-26 with `swvfs-rdma-daemon` image
+`kmbae27/rdma-sidecar:swvfs-20260626-0037bc15` and the patched
+`seaweedvfs-kmod` through commit `0625226`:
+
+- hnode1, hnode2, and hnode3 were reloaded with `seaweedvfs` srcversion
+  `55716D64317F45E00DEC860`.
+- Reloading the kernel module requires dropping all hnode1-hnode3 client pods
+  and the worker DaemonSet first. Installing the `.ko` file alone is not enough
+  if the old module is still referenced by active mounts.
+- POSIX smoke passed on the kernel mount: non-empty `rmdir` fails correctly,
+  `truncate` trims to the requested size, and `symlink`, `readlink`, `mkfifo`,
+  `unlink`, and `rmdir` work.
+- Cross-node xattr smoke passed: hnode1 set `user.swvfs`, hnode2 read it with
+  `getxattr` and saw it in `listxattr`.
+- The daemon now stores xattrs in filer metadata, enforces `unlink` vs `rmdir`
+  directory rules, trims chunks on truncate, and falls back to parent
+  `ListEntries` when direct filer lookup reports not found.
+- Current open issue: if hnode2 first looks up a missing file and hnode1 creates
+  it afterwards, a direct hnode2 `cat path` can still return `ENOENT` until a
+  parent `readdir` primes the positive dentry. The kmod currently exposes
+  `negative_drop_*` counters and runs delayed invalidation jobs, but final
+  component lookup still needs a deeper VFS dcache fix.
+
 ## RDMA I/O Benchmark Result
 
 Measured on 2026-06-25 with the kernel mount POC path:
