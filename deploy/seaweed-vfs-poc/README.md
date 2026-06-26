@@ -351,9 +351,23 @@ Validated again on 2026-06-26 with patched `seaweedvfs-kmod` through commit
 - hnode2 coherency counters after the run included `positive_refresh_enoent=2`,
   `remote_attr_size_changed=1`, and `remote_attr_cache_invalidated=2`, matching
   the delete/rename/truncate/overwrite tests.
-- POSIX smoke without hardlinks passed (`chmod`, `symlink`, `readlink`,
-  symlinked read, `rename`, `unlink`, `rmdir`). Hardlink remains a known gap:
-  `ln file hard` currently returns `Function not implemented`.
+- POSIX smoke passed for `chmod`, `symlink`, `readlink`, symlinked read,
+  `rename`, `unlink`, and `rmdir`.
+
+Validated hardlink support on 2026-06-26 with `swvfs-rdma-daemon` image
+`kmbae27/rdma-sidecar:swvfs-20260626-fad5cb00` and SeaweedFS commit
+`fad5cb001`:
+
+- `ln base hard` now succeeds through the kernel mount.
+- hnode1 saw `base` and `hard` with `nlink=2` and the same inode inside that
+  mount.
+- Fresh lookups on hnode2 and hnode3 saw both paths with `nlink=2` and the same
+  hardlink-ID-derived inode.
+- hnode2 wrote through the `hard` path, then read the updated content through
+  `base`; hnode1 also read the hnode2 update through `base`.
+- A node that created the hardlink can keep its pre-link inode number until
+  remount, but both hardlink paths stay wired to the same local inode and fresh
+  lookups derive inode identity from `HardLinkId`.
 
 ## RDMA I/O Benchmark Result
 
