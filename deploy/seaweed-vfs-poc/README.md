@@ -329,6 +329,32 @@ Validated on 2026-06-26 with `swvfs-rdma-daemon` image
   `lookup_success=2`, `lookup_enoent=1`, proving the plain-open refresh path
   issued a fresh filer lookup and found the remote create.
 
+Validated again on 2026-06-26 with patched `seaweedvfs-kmod` through commit
+`8c31edc`:
+
+- hnode1, hnode2, and hnode3 were reloaded with `seaweedvfs` srcversion
+  `D6EE5DA5E3A4DC301E5EE57`.
+- The kmod now refreshes positive dentries on file open, refreshes stale attrs
+  from `getattr` and `read_iter`, and invalidates the page cache when remote
+  size/mtime/ctime changes. `attr_cache_ttl_ms` is a runtime module parameter
+  for tuning correctness vs refresh traffic.
+- SeaweedFS can return a different remote inode number for the same path after
+  create/recreate. The kmod now counts this via `positive_refresh_ino_changed`
+  and treats the path's latest attrs as authoritative instead of returning
+  `ESTALE`.
+- Cross-node cache smoke passed: hnode2 saw hnode1 delete as ENOENT, saw hnode1
+  rename old path as ENOENT and new path as readable, saw truncate from 26 bytes
+  to 5 bytes immediately, and saw same-size overwrite update from `AAAA` to
+  `BBBB`.
+- Negative dentry regression smoke passed again: hnode2 first cached a missing
+  path, hnode1 created it, and hnode2 then read it directly.
+- hnode2 coherency counters after the run included `positive_refresh_enoent=2`,
+  `remote_attr_size_changed=1`, and `remote_attr_cache_invalidated=2`, matching
+  the delete/rename/truncate/overwrite tests.
+- POSIX smoke without hardlinks passed (`chmod`, `symlink`, `readlink`,
+  symlinked read, `rename`, `unlink`, `rmdir`). Hardlink remains a known gap:
+  `ln file hard` currently returns `Function not implemented`.
+
 ## RDMA I/O Benchmark Result
 
 Measured on 2026-06-25 with the kernel mount POC path:
