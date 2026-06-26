@@ -41,7 +41,7 @@ spec:
         - operator: Exists
       containers:
         - name: swvfs-rdma-daemon
-          image: kmbae27/rdma-sidecar:rdma-20260627-writeipc-07ad69d77
+          image: kmbae27/rdma-sidecar:rdma-20260627-localindex-54003ffdf
           imagePullPolicy: Always
           securityContext:
             privileged: true
