@@ -41,7 +41,7 @@ spec:
         - operator: Exists
       containers:
         - name: swvfs-rdma-daemon
-          image: kmbae27/rdma-sidecar:swvfs-20260626-1c3870bbe
+          image: kmbae27/rdma-sidecar:swvfs-20260626-f3c95e8af
           imagePullPolicy: Always
           securityContext:
             privileged: true
