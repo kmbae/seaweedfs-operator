@@ -444,6 +444,67 @@ is therefore not InfiniBand bandwidth; it is reducing per-chunk RDMA session and
 control-plane overhead, batching larger transfers, and avoiding one remote
 handshake per 256 KiB request.
 
+### RDMA Write-Back Coalescing
+
+Validated on 2026-06-27 with `swvfs-rdma-daemon` image
+`kmbae27/rdma-sidecar:swvfs-20260627-writeback-3b64cc1f`.
+
+The daemon now buffers sequential writes per file and flushes them on
+`FLUSH`/`RELEASE` or when the pending range reaches 32 MiB. This keeps the
+kernel ABI at 8 MiB per `WRITE` upcall while reducing SeaweedFS assign/write
+metadata operations and RDMA payload handshakes.
+
+```text
+512 MiB, bs=8M, hnode1 write -> hnode2 read
+before write-back: write 6417 ms, read 6310 ms
+after write-back:  write 3453 ms, read 3440 ms
+```
+
+Logs confirmed 16 coalesced 32 MiB writes with `data_rdma=true` and
+`real_rdma=true`; reads still use 64 separate 8 MiB RDMA payload requests. A
+64 MiB random cross-node checksum test also passed:
+
+```text
+sha256=00406923d41af513ffefad422b4138f364983993830b9be24014e132cccb2eb2
+write_elapsed_ms=460
+read_elapsed_ms=330
+```
+
+This is an improvement, not the production RDMA endpoint. The remaining large
+costs are userspace IPC copies, MessagePack frame copies, per-read 8 MiB
+sessions, and the remote sidecar's HTTP write into the volume server.
+
+### PJDFSTEST POSIX Gate
+
+Production readiness should use
+[pjd/pjdfstest](https://github.com/pjd/pjdfstest) as the POSIX syscall
+regression gate. Upstream `pjdfstest` expects tests to run from the filesystem
+under test, but the Seaweed VFS POC keeps the compiled helper outside the mount
+and only runs the test working directory on `/mnt/seaweedvfs`. This avoids
+mixing `exec`/mmap behavior of the helper binary with the filesystem syscall
+semantics under test.
+
+Fast core gate:
+
+```sh
+deploy/seaweed-vfs-poc/run-pjdfstest-vfs.sh
+```
+
+Full gate for a production candidate:
+
+```sh
+PJDFSTEST_TESTS=tests/ deploy/seaweed-vfs-poc/run-pjdfstest-vfs.sh
+```
+
+Current status:
+
+- Core subset passed on 2026-06-27 with the RDMA write-back image:
+  `Files=6`, `Tests=96`, `Result=PASS`.
+- Full `tests/` passed on 2026-06-27 with the RDMA write-back image:
+  `Files=238`, `Tests=8798`, `Result=PASS`, `180 wallclock secs`.
+- `pjdfstest` does not cover every distributed filesystem behavior; lock and
+  rename concurrency still need separate stress tests.
+
 ## Current Development Direction
 
 The current final POC shape is:
