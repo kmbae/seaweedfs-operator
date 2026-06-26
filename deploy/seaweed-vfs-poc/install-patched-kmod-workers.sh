@@ -104,7 +104,14 @@ spec:
                 cd /var/tmp/seaweedvfs-kmod-rdma
                 make clean >/dev/null 2>&1 || true
                 make
-                install -D -m 0644 seaweedvfs.ko "/lib/modules/\$(uname -r)/updates/dkms/seaweedvfs.ko"
+                modinfo ./seaweedvfs.ko
+                modinfo -F parm ./seaweedvfs.ko | grep -E "rdma_(read|write)_hints"
+                install_dir="/lib/modules/\$(uname -r)/updates/dkms"
+                rm -f "\${install_dir}/seaweedvfs.ko" \
+                  "\${install_dir}/seaweedvfs.ko.zst" \
+                  "\${install_dir}/seaweedvfs.ko.xz" \
+                  "\${install_dir}/seaweedvfs.ko.gz"
+                install -D -m 0644 seaweedvfs.ko "\${install_dir}/seaweedvfs.ko"
                 depmod -a "\$(uname -r)"
                 modinfo seaweedvfs
                 modinfo -F parm seaweedvfs | grep -E "rdma_(read|write)_hints"
