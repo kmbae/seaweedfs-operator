@@ -168,7 +168,7 @@ spec:
             - name: rdma-socket
               mountPath: /tmp/rdma
         - name: rdma-engine
-          image: kmbae27/rdma-engine:rdma-20260625-7a683fa9f
+          image: kmbae27/rdma-engine:rdma-20260626-e1419d965
           imagePullPolicy: Always
           command:
             - ./rdma-engine-server
