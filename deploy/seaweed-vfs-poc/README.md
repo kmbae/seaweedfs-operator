@@ -38,6 +38,9 @@ the kernel module should stay focused on VFS integration.
   hnode2, and hnode3 with an experimental `swvfs-rdma-daemon` that speaks
   `/dev/seaweedvfs` directly. Each pod also starts a node-local RDMA engine and
   mounts the same host path, `/var/lib/seaweedfs-vfs/mnt`.
+- `install-patched-kmod-workers.sh`: uploads the local `seaweedvfs-kmod` source
+  into a ConfigMap, builds it on hnode1, hnode2, and hnode3, and installs the
+  resulting module so the worker POC can enable read/write RDMA hint bits.
 - `clients-workers.yaml`: starts one shell pod on each worker POC node with the
   host mount exposed at `/mnt/seaweedvfs`.
 
@@ -198,6 +201,7 @@ To switch hnode1-hnode3 from the old proxy POC to the daemon POC:
 
 ```sh
 microk8s kubectl -n seaweed-vfs-poc delete daemonset seaweed-vfs-node-workers --ignore-not-found
+bash deploy/seaweed-vfs-poc/install-patched-kmod-workers.sh
 microk8s kubectl apply -f deploy/seaweed-vfs-poc/seaweed-vfs-rdma-workers.yaml
 microk8s kubectl -n seaweed-vfs-poc wait --for=condition=ready \
   pod -l app.kubernetes.io/name=seaweed-vfs-rdma-node-workers --timeout=5m
@@ -214,9 +218,10 @@ Validated on 2026-06-25 against hnode1, hnode2, and hnode3:
   node-local RDMA engine on each worker.
 - `df -h /mnt/seaweedvfs` and `ls -la /mnt/seaweedvfs` complete cleanly after
   adding daemon support for `STATFS` and empty xattr defaults.
-- The currently installed official `seaweedvfs` module does not set the
-  experimental RDMA hint bits, so the worker POC runs the daemon with
-  `--force-rdma=true`.
+- The first daemon validation used `--force-rdma=true` because the official
+  `seaweedvfs` module does not set the experimental RDMA hint bits. The current
+  worker POC expects the patched module from `install-patched-kmod-workers.sh`
+  and starts `swvfs-rdma-daemon` without force mode.
 - Cross-node write test:
   - hnode1 wrote `/mnt/seaweedvfs/rdma-force-poc-1782394300.bin` (256 KiB).
   - hnode1 daemon logged `RDMA payload write path completed` with

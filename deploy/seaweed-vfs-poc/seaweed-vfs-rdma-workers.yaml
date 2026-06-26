@@ -74,7 +74,20 @@ spec:
               }
               trap term TERM INT
 
-              modprobe seaweedvfs 2>/dev/null || true
+              modprobe -r seaweedvfs 2>/dev/null || true
+              modprobe seaweedvfs rdma_read_hints=1 rdma_write_hints=1
+              for param in rdma_read_hints rdma_write_hints; do
+                value="$(cat "/sys/module/seaweedvfs/parameters/${param}" 2>/dev/null || true)"
+                case "${value}" in
+                  Y|y|1|true|TRUE)
+                    echo "seaweedvfs ${param}=${value}"
+                    ;;
+                  *)
+                    echo "ERROR: seaweedvfs ${param} is not enabled; got '${value}'" >&2
+                    exit 1
+                    ;;
+                esac
+              done
               i=0
               while [ ! -e /dev/seaweedvfs ] && [ "${i}" -lt 100 ]; do
                 i=$((i + 1))
@@ -92,7 +105,6 @@ spec:
                 --enable-read-rdma=true \
                 --enable-write-rdma=true \
                 --enable-payload-rdma=true \
-                --force-rdma=true \
                 --fallback-on-error=true \
                 --timeout=300s \
                 --max-connections=8 \
