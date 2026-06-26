@@ -41,7 +41,7 @@ spec:
         - operator: Exists
       containers:
         - name: swvfs-rdma-daemon
-          image: kmbae27/rdma-sidecar:swvfs-20260627-pjdfstest-7504e23a
+          image: kmbae27/rdma-sidecar:swvfs-20260627-chunk8m-1b415b3a
           imagePullPolicy: Always
           securityContext:
             privileged: true
@@ -138,15 +138,15 @@ spec:
             - name: UNMOUNT_ON_EXIT
               value: "1"
             - name: ENABLE_READ_RDMA
-              value: "false"
+              value: "true"
             - name: ENABLE_WRITE_RDMA
-              value: "false"
+              value: "true"
             - name: ENABLE_PAYLOAD_RDMA
-              value: "false"
+              value: "true"
             - name: RDMA_READ_MIN_SIZE
-              value: "8388608"
+              value: "0"
             - name: RDMA_WRITE_MIN_SIZE
-              value: "8388608"
+              value: "0"
           readinessProbe:
             exec:
               command:
