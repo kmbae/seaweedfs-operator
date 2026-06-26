@@ -285,6 +285,23 @@ Validated again on 2026-06-26 with the patched `seaweedvfs` module and the
   `data_source=remote-rdma-write` or `data_source=remote-rdma`; the volume-side
   RDMA engine logged matching RDMA GET/PUT completions.
 
+Validated again on 2026-06-26 with RDMA engine image
+`kmbae27/rdma-engine:rdma-20260626-e1419d965`:
+
+- The volume-side RDMA engine now scopes UCX peer endpoint cache keys by worker
+  address as well as operation, volume, and needle. This prevents a read of the
+  same needle from hnode2 and hnode3 from reusing an endpoint created for another
+  worker.
+- hnode1 wrote an 8 MiB file through `swvfs-rdma-daemon` with
+  `data_source=remote-rdma-write` and `real_rdma=true`.
+- hnode2 and hnode3 read the hnode1-written file with matching SHA-256 checksums
+  and `data_source=remote-rdma`, `real_rdma=true`.
+- r7615 volume RDMA engine stayed at restart count 0 and logged successful RDMA
+  PUT completions for both worker readers.
+- After the correctness run, the live POC DaemonSet was returned to the checked-in
+  safer defaults: `read_rdma=false`, `write_rdma=false`, `payload_rdma=false`,
+  `RDMA_READ_MIN_SIZE=8388608`, and `RDMA_WRITE_MIN_SIZE=8388608`.
+
 ## RDMA I/O Benchmark Result
 
 Measured on 2026-06-25 with the kernel mount POC path:
