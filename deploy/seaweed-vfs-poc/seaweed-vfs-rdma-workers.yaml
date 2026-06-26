@@ -41,7 +41,7 @@ spec:
         - operator: Exists
       containers:
         - name: swvfs-rdma-daemon
-          image: kmbae27/rdma-sidecar:rdma-20260627-largeoffset-e06e1c2ba
+          image: kmbae27/rdma-sidecar:rdma-20260627-persist-71d98bc7
           imagePullPolicy: Always
           securityContext:
             privileged: true
@@ -168,7 +168,7 @@ spec:
             - name: rdma-socket
               mountPath: /tmp/rdma
         - name: rdma-engine
-          image: kmbae27/rdma-engine:rdma-20260627-volgrpc-9cb5ef4e
+          image: kmbae27/rdma-engine:rdma-20260627-persist-71d98bc7
           imagePullPolicy: Always
           command:
             - ./rdma-engine-server
