@@ -102,9 +102,9 @@ spec:
                 --dev=/dev/seaweedvfs \
                 --filer=seaweedfs-filer.seaweedfs.svc.cluster.local:8888 \
                 --engine-socket=/tmp/rdma/rdma-engine.sock \
-                --enable-read-rdma=true \
-                --enable-write-rdma=true \
-                --enable-payload-rdma=true \
+                --enable-read-rdma="${ENABLE_READ_RDMA:-true}" \
+                --enable-write-rdma="${ENABLE_WRITE_RDMA:-true}" \
+                --enable-payload-rdma="${ENABLE_PAYLOAD_RDMA:-true}" \
                 --fallback-on-error=true \
                 --timeout=300s \
                 --max-connections=8 \
@@ -135,6 +135,12 @@ spec:
               value: /var/lib/seaweedfs-vfs/mnt
             - name: UNMOUNT_ON_EXIT
               value: "1"
+            - name: ENABLE_READ_RDMA
+              value: "true"
+            - name: ENABLE_WRITE_RDMA
+              value: "true"
+            - name: ENABLE_PAYLOAD_RDMA
+              value: "true"
           readinessProbe:
             exec:
               command:

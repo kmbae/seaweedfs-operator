@@ -210,6 +210,20 @@ microk8s kubectl -n seaweed-vfs-poc wait --for=condition=ready \
 The client pods in `clients-workers.yaml` can be reused because the host mount
 path is unchanged.
 
+For TCP fallback comparison runs, disable the daemon RDMA backends through the
+DaemonSet environment and recreate the client pods so they bind the fresh host
+mount:
+
+```sh
+microk8s kubectl -n seaweed-vfs-poc set env daemonset/seaweed-vfs-rdma-node-workers \
+  ENABLE_READ_RDMA=false ENABLE_WRITE_RDMA=false ENABLE_PAYLOAD_RDMA=false
+microk8s kubectl -n seaweed-vfs-poc rollout status daemonset/seaweed-vfs-rdma-node-workers --timeout=5m
+microk8s kubectl -n seaweed-vfs-poc delete pod -l app.kubernetes.io/name=seaweed-vfs-client-worker --ignore-not-found
+microk8s kubectl apply -f deploy/seaweed-vfs-poc/clients-workers.yaml
+```
+
+Set the same values back to `true` to return to the RDMA path.
+
 ### RDMA Daemon Result
 
 Validated on 2026-06-25 against hnode1, hnode2, and hnode3:
