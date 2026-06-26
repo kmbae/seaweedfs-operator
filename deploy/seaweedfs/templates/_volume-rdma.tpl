@@ -36,6 +36,10 @@ Usage: {{- include "seaweedfs.rdmaVolumeGroup" . | nindent 4 }}
     {{- end }}
     - name: VOLUME_SERVER_URL
       value: "http://127.0.0.1:8081/local-volume"
+    - name: VOLUME_DATA_DIR
+      value: "/data0"
+    - name: VOLUME_IDX_DIR
+      value: "/data0"
     - name: RDMA_LISTEN_PORT
       value: {{ .Values.rdma.listenPort | quote }}
     {{- if .Values.rdma.ucxTls }}
@@ -83,6 +87,9 @@ Usage: {{- include "seaweedfs.rdmaVolumeGroup" . | nindent 4 }}
   volumeMounts:
     - name: rdma-socket
       mountPath: /tmp/rdma
+    - name: mount0
+      mountPath: /data0
+      readOnly: true
     {{- if eq $rdmaMode "hostPF" }}
     - name: dev-infiniband
       mountPath: /dev/infiniband
@@ -176,6 +183,10 @@ sidecars:
       {{- end }}
       - name: VOLUME_SERVER_URL
         value: "http://127.0.0.1:8081/local-volume"
+      - name: VOLUME_DATA_DIR
+        value: "/data0"
+      - name: VOLUME_IDX_DIR
+        value: "/data0"
       - name: RDMA_LISTEN_PORT
         value: {{ .Values.rdma.listenPort | quote }}
       {{- if .Values.rdma.ucxTls }}
@@ -223,6 +234,9 @@ sidecars:
     volumeMounts:
       - name: rdma-socket
         mountPath: /tmp/rdma
+      - name: mount0
+        mountPath: /data0
+        readOnly: true
       {{- if eq $rdmaMode "hostPF" }}
       - name: dev-infiniband
         mountPath: /dev/infiniband
