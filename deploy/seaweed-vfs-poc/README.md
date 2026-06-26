@@ -250,6 +250,22 @@ Validated on 2026-06-25 against hnode1, hnode2, and hnode3:
 This proves the replacement daemon path can do SeaweedFS read and write payload
 I/O over real RDMA without the old `sw-kd` HTTP proxy layer.
 
+Validated again on 2026-06-26 with the patched `seaweedvfs` module and
+`swvfs-rdma-daemon` image `kmbae27/rdma-sidecar:swvfs-20260626-f3c95e8af`:
+
+- hnode1, hnode2, and hnode3 load `seaweedvfs` with
+  `rdma_read_hints=Y` and `rdma_write_hints=Y`.
+- `swvfs-rdma-daemon` starts with `force_rdma=false`,
+  `read_rdma=true`, `write_rdma=true`, and `payload_rdma=true`.
+- `mkdir` now persists directories in the SeaweedFS filer format, so a
+  directory created on hnode1 is seen as a directory from hnode2.
+- Basic `SETATTR` is implemented for mode/uid/gid/size/mtime/atime, so
+  workflows such as `touch` and fio file setup no longer fail with
+  `Function not implemented`.
+- hnode1 write and hnode2 read fio runs both logged `real_rdma=true` with
+  `data_source=remote-rdma-write` or `data_source=remote-rdma`; the volume-side
+  RDMA engine logged matching RDMA GET/PUT completions.
+
 ## RDMA I/O Benchmark Result
 
 Measured on 2026-06-25 with the kernel mount POC path:
@@ -295,6 +311,35 @@ This means the POC is functionally RDMA-backed, but it is not yet a production
 benchmark path. The current limiting factors are the proxy/sidecar handling of
 larger buffered write/fsync workloads, lack of `O_DIRECT` support in
 `seaweedvfs`, and per-object overhead that dominates small I/O.
+
+### RDMA Daemon fio Comparison
+
+Measured on 2026-06-26 through the replacement daemon path:
+
+```text
+seaweedvfs.ko -> /dev/seaweedvfs -> swvfs-rdma-daemon
+  -> local rdma-engine or HTTP fallback
+  -> SeaweedFS volume server
+```
+
+Both runs used fio 3.36 with `--ioengine=sync --direct=0 --iodepth=1
+--bs=256k --size=8m`. Writes ran on hnode1 and reads ran from hnode2 against
+the hnode1-written file.
+
+| Path | Operation | Throughput | Avg Completion Latency |
+| --- | --- | ---: | ---: |
+| RDMA hint path | write | 2440 KiB/s | 104.92 ms |
+| RDMA hint path | read | 2438 KiB/s | 104.98 ms |
+| TCP fallback | write | 58.4 MiB/s | 4.25 ms |
+| TCP fallback | read | 70.2 MiB/s | 3.56 ms |
+
+The RDMA hint path is functionally correct but currently much slower than TCP
+fallback for this fio shape. The logs show the RDMA path spends roughly 95-100 ms
+per 256 KiB chunk in the current daemon/engine protocol, while TCP fallback
+completes the same chunk size in a few milliseconds. The next optimization target
+is therefore not InfiniBand bandwidth; it is reducing per-chunk RDMA session and
+control-plane overhead, batching larger transfers, and avoiding one remote
+handshake per 256 KiB request.
 
 ## Cleanup
 
