@@ -35,11 +35,7 @@ Usage: {{- include "seaweedfs.rdmaVolumeGroup" . | nindent 4 }}
           fieldPath: status.podIP
     {{- end }}
     - name: VOLUME_SERVER_URL
-      {{- if eq $rdmaMode "hostPF" }}
-      value: "http://$(POD_IP):8444"
-      {{- else }}
-      value: {{ .Values.rdma.volumeServerURL | quote }}
-      {{- end }}
+      value: "http://127.0.0.1:8081/local-volume"
     - name: RDMA_LISTEN_PORT
       value: {{ .Values.rdma.listenPort | quote }}
     {{- if .Values.rdma.ucxTls }}
@@ -179,11 +175,7 @@ sidecars:
             fieldPath: status.podIP
       {{- end }}
       - name: VOLUME_SERVER_URL
-        {{- if eq $rdmaMode "hostPF" }}
-        value: "http://$(POD_IP):8444"
-        {{- else }}
-        value: {{ .Values.rdma.volumeServerURL | quote }}
-        {{- end }}
+        value: "http://127.0.0.1:8081/local-volume"
       - name: RDMA_LISTEN_PORT
         value: {{ .Values.rdma.listenPort | quote }}
       {{- if .Values.rdma.ucxTls }}
