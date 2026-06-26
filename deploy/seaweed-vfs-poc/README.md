@@ -304,10 +304,10 @@ Validated again on 2026-06-26 with RDMA engine image
 
 Validated on 2026-06-26 with `swvfs-rdma-daemon` image
 `kmbae27/rdma-sidecar:swvfs-20260626-0037bc15` and the patched
-`seaweedvfs-kmod` through commit `0625226`:
+`seaweedvfs-kmod` through commit `001ebd2`:
 
 - hnode1, hnode2, and hnode3 were reloaded with `seaweedvfs` srcversion
-  `55716D64317F45E00DEC860`.
+  `66229F74CC4B242F148C26A`.
 - Reloading the kernel module requires dropping all hnode1-hnode3 client pods
   and the worker DaemonSet first. Installing the `.ko` file alone is not enough
   if the old module is still referenced by active mounts.
@@ -319,11 +319,15 @@ Validated on 2026-06-26 with `swvfs-rdma-daemon` image
 - The daemon now stores xattrs in filer metadata, enforces `unlink` vs `rmdir`
   directory rules, trims chunks on truncate, and falls back to parent
   `ListEntries` when direct filer lookup reports not found.
-- Current open issue: if hnode2 first looks up a missing file and hnode1 creates
-  it afterwards, a direct hnode2 `cat path` can still return `ENOENT` until a
-  parent `readdir` primes the positive dentry. The kmod currently exposes
-  `negative_drop_*` counters and runs delayed invalidation jobs, but final
-  component lookup still needs a deeper VFS dcache fix.
+- The kmod now exposes opt-in `dcache_trace` logs and dcache counters for
+  `lookup`, `d_revalidate`, `d_weak_revalidate`, negative dentry invalidation,
+  and readdir cache priming.
+- Cross-node negative lookup refresh passed: hnode2 first looked up a missing
+  file, hnode1 created the file afterwards, and hnode2 then read it directly
+  without parent `readdir`. hnode2 counters moved from `lookup_calls=2`,
+  `lookup_success=1`, `lookup_enoent=1` to `lookup_calls=3`,
+  `lookup_success=2`, `lookup_enoent=1`, proving the plain-open refresh path
+  issued a fresh filer lookup and found the remote create.
 
 ## RDMA I/O Benchmark Result
 
