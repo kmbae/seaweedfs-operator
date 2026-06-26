@@ -41,7 +41,7 @@ spec:
         - operator: Exists
       containers:
         - name: swvfs-rdma-daemon
-          image: kmbae27/rdma-sidecar:swvfs-20260626-f3c95e8af
+          image: kmbae27/rdma-sidecar:swvfs-20260626-8bc56bb9d
           imagePullPolicy: Always
           securityContext:
             privileged: true
@@ -102,9 +102,11 @@ spec:
                 --dev=/dev/seaweedvfs \
                 --filer=seaweedfs-filer.seaweedfs.svc.cluster.local:8888 \
                 --engine-socket=/tmp/rdma/rdma-engine.sock \
-                --enable-read-rdma="${ENABLE_READ_RDMA:-true}" \
-                --enable-write-rdma="${ENABLE_WRITE_RDMA:-true}" \
-                --enable-payload-rdma="${ENABLE_PAYLOAD_RDMA:-true}" \
+                --enable-read-rdma="${ENABLE_READ_RDMA:-false}" \
+                --enable-write-rdma="${ENABLE_WRITE_RDMA:-false}" \
+                --enable-payload-rdma="${ENABLE_PAYLOAD_RDMA:-false}" \
+                --rdma-read-min-size="${RDMA_READ_MIN_SIZE:-8388608}" \
+                --rdma-write-min-size="${RDMA_WRITE_MIN_SIZE:-8388608}" \
                 --fallback-on-error=true \
                 --timeout=300s \
                 --max-connections=8 \
@@ -136,11 +138,15 @@ spec:
             - name: UNMOUNT_ON_EXIT
               value: "1"
             - name: ENABLE_READ_RDMA
-              value: "true"
+              value: "false"
             - name: ENABLE_WRITE_RDMA
-              value: "true"
+              value: "false"
             - name: ENABLE_PAYLOAD_RDMA
-              value: "true"
+              value: "false"
+            - name: RDMA_READ_MIN_SIZE
+              value: "8388608"
+            - name: RDMA_WRITE_MIN_SIZE
+              value: "8388608"
           readinessProbe:
             exec:
               command:

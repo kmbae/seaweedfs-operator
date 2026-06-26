@@ -207,22 +207,35 @@ microk8s kubectl -n seaweed-vfs-poc wait --for=condition=ready \
   pod -l app.kubernetes.io/name=seaweed-vfs-rdma-node-workers --timeout=5m
 ```
 
-The client pods in `clients-workers.yaml` can be reused because the host mount
-path is unchanged.
+The checked-in DaemonSet defaults to the safer TCP fallback path. The patched
+kernel module still sets read/write RDMA hint bits, but the daemon only uses
+RDMA when it is explicitly enabled and the request size is at least the
+configured threshold.
 
-For TCP fallback comparison runs, disable the daemon RDMA backends through the
-DaemonSet environment and recreate the client pods so they bind the fresh host
-mount:
+To run the default TCP fallback path, apply the DaemonSet as-is and recreate the
+client pods so they bind the fresh host mount:
+
+```sh
+microk8s kubectl -n seaweed-vfs-poc delete pod -l app.kubernetes.io/name=seaweed-vfs-client-worker --ignore-not-found
+microk8s kubectl apply -f deploy/seaweed-vfs-poc/clients-workers.yaml
+```
+
+To opt into the current experimental RDMA path for larger requests:
 
 ```sh
 microk8s kubectl -n seaweed-vfs-poc set env daemonset/seaweed-vfs-rdma-node-workers \
-  ENABLE_READ_RDMA=false ENABLE_WRITE_RDMA=false ENABLE_PAYLOAD_RDMA=false
+  ENABLE_READ_RDMA=true \
+  ENABLE_WRITE_RDMA=true \
+  ENABLE_PAYLOAD_RDMA=true \
+  RDMA_READ_MIN_SIZE=8388608 \
+  RDMA_WRITE_MIN_SIZE=8388608
 microk8s kubectl -n seaweed-vfs-poc rollout status daemonset/seaweed-vfs-rdma-node-workers --timeout=5m
 microk8s kubectl -n seaweed-vfs-poc delete pod -l app.kubernetes.io/name=seaweed-vfs-client-worker --ignore-not-found
 microk8s kubectl apply -f deploy/seaweed-vfs-poc/clients-workers.yaml
 ```
 
-Set the same values back to `true` to return to the RDMA path.
+Set the min-size values to `0` only for focused RDMA correctness tests where
+every hinted request should be forced through the RDMA backend.
 
 ### RDMA Daemon Result
 
@@ -250,18 +263,24 @@ Validated on 2026-06-25 against hnode1, hnode2, and hnode3:
 This proves the replacement daemon path can do SeaweedFS read and write payload
 I/O over real RDMA without the old `sw-kd` HTTP proxy layer.
 
-Validated again on 2026-06-26 with the patched `seaweedvfs` module and
-`swvfs-rdma-daemon` image `kmbae27/rdma-sidecar:swvfs-20260626-f3c95e8af`:
+Validated again on 2026-06-26 with the patched `seaweedvfs` module and the
+`swvfs-rdma-daemon` image `kmbae27/rdma-sidecar:swvfs-20260626-8bc56bb9d`:
 
 - hnode1, hnode2, and hnode3 load `seaweedvfs` with
   `rdma_read_hints=Y` and `rdma_write_hints=Y`.
-- `swvfs-rdma-daemon` starts with `force_rdma=false`,
-  `read_rdma=true`, `write_rdma=true`, and `payload_rdma=true`.
+- The RDMA correctness run temporarily started `swvfs-rdma-daemon` with
+  `force_rdma=false`, `read_rdma=true`, `write_rdma=true`, and
+  `payload_rdma=true`.
 - `mkdir` now persists directories in the SeaweedFS filer format, so a
   directory created on hnode1 is seen as a directory from hnode2.
 - Basic `SETATTR` is implemented for mode/uid/gid/size/mtime/atime, so
   workflows such as `touch` and fio file setup no longer fail with
   `Function not implemented`.
+- The daemon also handles `RENAME`, `SYMLINK`/`READLINK`, and `MKNOD`, reducing
+  the remaining gap from a basic POSIX mount surface.
+- The checked-in DaemonSet starts with `read_rdma=false`, `write_rdma=false`,
+  and `payload_rdma=false`; RDMA remains available through the opt-in
+  environment variables above.
 - hnode1 write and hnode2 read fio runs both logged `real_rdma=true` with
   `data_source=remote-rdma-write` or `data_source=remote-rdma`; the volume-side
   RDMA engine logged matching RDMA GET/PUT completions.
@@ -341,6 +360,22 @@ is therefore not InfiniBand bandwidth; it is reducing per-chunk RDMA session and
 control-plane overhead, batching larger transfers, and avoiding one remote
 handshake per 256 KiB request.
 
+## Current Development Direction
+
+The current final POC shape is:
+
+1. Keep `seaweedvfs` as the long-term mount base so Linux owns VFS caching,
+   dentries, inodes, and page cache behavior.
+2. Keep SeaweedFS networking in the userspace daemon, not in the kernel module.
+3. Keep TCP/HTTP fallback as the production default until RDMA beats it on real
+   fio workloads.
+4. Treat RDMA as an opt-in large-I/O backend with `RDMA_READ_MIN_SIZE` and
+   `RDMA_WRITE_MIN_SIZE` thresholds.
+5. Make the next RDMA work about protocol shape: persistent sessions,
+   batched/streamed transfers, fewer per-chunk handshakes, and eventually a
+   cleaner zero-copy daemon protocol. Only after that should RDMA become a
+   default path.
+
 ## Cleanup
 
 The DaemonSet sets `UNMOUNT_ON_EXIT=1`, so deleting it should unmount the POC
@@ -349,6 +384,7 @@ mount from hnode4.
 ```sh
 microk8s kubectl delete -f deploy/seaweed-vfs-poc/client-hnode4.yaml --ignore-not-found
 microk8s kubectl delete -f deploy/seaweed-vfs-poc/clients-workers.yaml --ignore-not-found
+microk8s kubectl delete -f deploy/seaweed-vfs-poc/seaweed-vfs-rdma-workers.yaml --ignore-not-found
 microk8s kubectl delete -f deploy/seaweed-vfs-poc/seaweed-vfs-workers.yaml --ignore-not-found
 microk8s kubectl delete -f deploy/seaweed-vfs-poc/seaweed-vfs-hnode4.yaml --ignore-not-found
 ```
