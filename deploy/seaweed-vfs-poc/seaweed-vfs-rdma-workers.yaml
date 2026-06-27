@@ -169,9 +169,9 @@ spec:
             - name: ENABLE_PAYLOAD_RDMA
               value: "true"
             - name: RDMA_READ_MIN_SIZE
-              value: "0"
+              value: "262144"
             - name: RDMA_WRITE_MIN_SIZE
-              value: "0"
+              value: "1048576"
             - name: RDMA_CONTROL_LISTEN
               value: :18084
             - name: RDMA_PEER_ENDPOINTS

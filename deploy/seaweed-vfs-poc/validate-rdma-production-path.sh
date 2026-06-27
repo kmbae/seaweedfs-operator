@@ -6,6 +6,7 @@ NS="${NS:-seaweed-vfs-poc}"
 SELECTOR="${SELECTOR:-app.kubernetes.io/name=seaweed-vfs-rdma-node-workers}"
 MNT="${MNT:-/var/lib/seaweedfs-vfs/mnt}"
 SIZE_MB="${SIZE_MB:-16}"
+READ_BS_MB="${READ_BS_MB:-1}"
 RUN_FIO="${RUN_FIO:-auto}"
 RUN_PJDFSTEST="${RUN_PJDFSTEST:-auto}"
 RUN_FAILOVER="${RUN_FAILOVER:-false}"
@@ -89,10 +90,27 @@ run_read_write_smoke() {
   local sum_dst
 
   echo "== write ${SIZE_MB}MiB from ${src} =="
-  exec_sh "$src" "dd if=/dev/zero of='${file}' bs=1M count='${SIZE_MB}' conv=fsync status=none"
+  exec_sh "$src" "
+    start=\$(date +%s%N)
+    dd if=/dev/zero of='${file}' bs=1M count='${SIZE_MB}' conv=fsync status=none
+    end=\$(date +%s%N)
+    bytes=\$(wc -c < '${file}')
+    elapsed=\$((end - start))
+    printf 'bytes=%s elapsed_ns=%s\n' \"\$bytes\" \"\$elapsed\"
+  "
   sum_src="$(exec_sh "$src" "sha256sum '${file}' | awk '{print \$1}'")"
 
-  echo "== read ${SIZE_MB}MiB from ${dst} =="
+  echo "== large-block read ${SIZE_MB}MiB from ${dst} =="
+  exec_sh "$dst" "
+    start=\$(date +%s%N)
+    dd if='${file}' of=/dev/null bs='${READ_BS_MB}'M status=none
+    end=\$(date +%s%N)
+    bytes=\$(wc -c < '${file}')
+    elapsed=\$((end - start))
+    printf 'bytes=%s elapsed_ns=%s\n' \"\$bytes\" \"\$elapsed\"
+  "
+
+  echo "== checksum read ${SIZE_MB}MiB from ${dst} =="
   sum_dst="$(exec_sh "$dst" "sha256sum '${file}' | awk '{print \$1}'")"
   if [ "$sum_src" != "$sum_dst" ]; then
     echo "ERROR: checksum mismatch: src=${sum_src} dst=${sum_dst}" >&2
