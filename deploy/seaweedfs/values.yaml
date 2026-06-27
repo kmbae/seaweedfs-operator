@@ -95,7 +95,7 @@ rdma:
   mode: hostPF
   registry: kmbae27
   sidecarTag: rdma-20260628-c75fde18
-  engineTag: rdma-20260628-c4cbcaa7
+  engineTag: rdma-20260628-43f5aa4d
   imagePullPolicy: Always
   enablePayloadRDMA: true
   enableNativeVolumeRDMA: true
