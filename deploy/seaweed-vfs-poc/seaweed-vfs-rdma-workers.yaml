@@ -101,12 +101,22 @@ spec:
                 }
               fi
               if lsmod | grep -q '^seaweedvfs '; then
-                modprobe -r seaweedvfs || {
-                  echo "ERROR: failed to unload existing seaweedvfs module; a stale mount or process is still using it" >&2
-                  exit 1
-                }
+                fresh_module=true
+                for param in rdma_read_window_ios kernel_write_rdma_direct_iter_bytes kernel_write_rdma_bounce_copy_bytes; do
+                  [ -e "/sys/module/seaweedvfs/parameters/${param}" ] || fresh_module=false
+                done
+                if [ "${fresh_module}" = "true" ]; then
+                  echo "reusing already loaded fresh seaweedvfs module"
+                else
+                  modprobe -r seaweedvfs || {
+                    echo "ERROR: failed to unload stale seaweedvfs module; a stale mount or process is still using it" >&2
+                    exit 1
+                  }
+                fi
               fi
-              modprobe seaweedvfs kernel_rdma=1 rdma_read_hints=1 rdma_write_hints=1 rdma_read_window_ios="${RDMA_READ_WINDOW_IOS:-4}"
+              if ! lsmod | grep -q '^seaweedvfs '; then
+                modprobe seaweedvfs kernel_rdma=1 rdma_read_hints=1 rdma_write_hints=1 rdma_read_window_ios="${RDMA_READ_WINDOW_IOS:-4}"
+              fi
               for param in kernel_rdma rdma_read_hints rdma_write_hints; do
                 value="$(cat "/sys/module/seaweedvfs/parameters/${param}" 2>/dev/null || true)"
                 case "${value}" in
