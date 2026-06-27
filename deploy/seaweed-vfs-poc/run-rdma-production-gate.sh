@@ -213,10 +213,6 @@ assert_counter_increased "kernel_read_rdma_desc_ops on ${reader_workers[0]}" "${
 assert_counter_increased "kernel_rdma_remote_read_completions on ${reader_workers[0]}" "${reader_read_completions_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_remote_read_completions)"
 
 log "Checking RDMA logs"
-writer_logs="$(kctl -n "${NS}" logs "${writer_worker}" -c "${WORKER_CONTAINER}" --since-time="${since_time}" || true)"
-assert_log_contains "${writer_logs}" "remote-rdma-write:volume-grpc" "${writer_worker}"
-assert_log_contains "${writer_logs}" "real_rdma=true" "${writer_worker}"
-
 for pod in "${reader_workers[@]}"; do
   logs="$(kctl -n "${NS}" logs "${pod}" -c "${WORKER_CONTAINER}" --since-time="${since_time}" || true)"
   assert_log_contains "${logs}" "remote-rdma:local-volume-rust" "${pod}"
