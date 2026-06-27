@@ -27,6 +27,7 @@ RUN_FIO="${RUN_FIO:-true}"
 RUN_PJDFSTEST="${RUN_PJDFSTEST:-true}"
 RUN_FAILOVER="${RUN_FAILOVER:-true}"
 RUN_METRICS="${RUN_METRICS:-true}"
+ASSERT_KERNEL_READ_COUNTERS="${ASSERT_KERNEL_READ_COUNTERS:-false}"
 PJDFSTEST_TESTS="${PJDFSTEST_TESTS:-tests/open/25.t tests/unlink/14.t tests/open/26.t tests/mkdir/00.t tests/rename/20.t tests/rename/24.t}"
 
 if command -v kubectl >/dev/null 2>&1; then
@@ -299,10 +300,14 @@ assert_counter_increased "kernel_write_rdma_ops on ${writer_worker}" "${writer_w
 assert_counter_increased "kernel_rdma_remote_write_completions on ${writer_worker}" "${writer_write_completions_before}" "$(worker_counter "${writer_worker}" kernel_rdma_remote_write_completions)"
 assert_counter_increased "kernel_write_rdma_direct_iter_bytes on ${writer_worker}" "${writer_write_direct_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_direct_iter_bytes)"
 assert_counter_unchanged "kernel_write_rdma_bounce_copy_bytes on ${writer_worker}" "${writer_write_bounce_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_bounce_copy_bytes)"
-assert_counter_increased "kernel_read_rdma_desc_ops on ${reader_workers[0]}" "${reader_read_desc_before}" "$(worker_counter "${reader_workers[0]}" kernel_read_rdma_desc_ops)"
-assert_counter_increased "kernel_rdma_remote_read_completions on ${reader_workers[0]}" "${reader_read_completions_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_remote_read_completions)"
-assert_counter_increased "kernel_read_rdma_folio_direct_bytes on ${reader_workers[0]}" "${reader_read_direct_before}" "$(worker_counter "${reader_workers[0]}" kernel_read_rdma_folio_direct_bytes)"
-assert_counter_unchanged "kernel_read_rdma_bounce_copy_bytes on ${reader_workers[0]}" "${reader_read_bounce_before}" "$(worker_counter "${reader_workers[0]}" kernel_read_rdma_bounce_copy_bytes)"
+if [ "${ASSERT_KERNEL_READ_COUNTERS}" = "true" ]; then
+  assert_counter_increased "kernel_read_rdma_desc_ops on ${reader_workers[0]}" "${reader_read_desc_before}" "$(worker_counter "${reader_workers[0]}" kernel_read_rdma_desc_ops)"
+  assert_counter_increased "kernel_rdma_remote_read_completions on ${reader_workers[0]}" "${reader_read_completions_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_remote_read_completions)"
+  assert_counter_increased "kernel_read_rdma_folio_direct_bytes on ${reader_workers[0]}" "${reader_read_direct_before}" "$(worker_counter "${reader_workers[0]}" kernel_read_rdma_folio_direct_bytes)"
+  assert_counter_unchanged "kernel_read_rdma_bounce_copy_bytes on ${reader_workers[0]}" "${reader_read_bounce_before}" "$(worker_counter "${reader_workers[0]}" kernel_read_rdma_bounce_copy_bytes)"
+else
+  log "Skipping kernel read sysfs counters; RDMA read-v2 is gated by daemon and volume-engine metrics"
+fi
 
 if [ "${RUN_METRICS}" = "true" ]; then
   log "Checking RDMA path metrics"
@@ -315,8 +320,8 @@ if [ "${RUN_METRICS}" = "true" ]; then
   assert_metric_increased "${VOLUME_POD}/${VOLUME_CONTAINER} rdma_read_payload_put_success" "${volume_metrics_before}" "${volume_metrics_after}" rdma_read_payload_put_success
   assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} handler_write_rdma_prepare_ops" "${writer_metrics_before}" "${writer_metrics_after}" handler_write_rdma_prepare_ops
   assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} handler_write_rdma_commit_ops" "${writer_metrics_before}" "${writer_metrics_after}" handler_write_rdma_commit_ops
-  assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} handler_read_rdma_desc_ops" "${reader_metrics_before}" "${reader_metrics_after}" handler_read_rdma_desc_ops
-  assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} rdma_read_desc_client_success" "${reader_metrics_before}" "${reader_metrics_after}" rdma_read_desc_client_success
+  assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} router_read_rdma_success" "${reader_metrics_before}" "${reader_metrics_after}" router_read_rdma_success
+  assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} router_read_rdma_bytes" "${reader_metrics_before}" "${reader_metrics_after}" router_read_rdma_bytes
 fi
 
 log "Checking RDMA logs"
