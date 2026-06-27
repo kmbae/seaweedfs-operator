@@ -98,6 +98,18 @@ rdma:
   engineTag: rdma-20260627-metrics-1f07b31
   imagePullPolicy: Always
   enablePayloadRDMA: true
+  enableNativeVolumeRDMA: true
+  nativeVolume:
+    enabled: true
+    socketPath: /tmp/rdma/volume-rdma-engine.sock
+    provider: verbs
+    hcaPort: 1
+    gidIndex: 0
+    fallbackMock: false
+    serviceLevel: 0
+    readMaxSizeMB: 16
+    readLeaseTTL: 30s
+    readBufferSizeMB: 4
   volumeGrpcMaxMessageBytes: "134217728"
   deviceName: mlx5_1
   ucxTls: rc_verbs,ud_verbs,tcp,self

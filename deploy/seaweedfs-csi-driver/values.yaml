@@ -50,6 +50,13 @@ rdma:
     image: kmbae27/rdma-engine:rdma-20260625-7a683fa9f
     imagePullPolicy: Always
     deviceName: ""
+    nativeVolume:
+      enabled: true
+      socketPath: /tmp/rdma/volume-rdma-engine.sock
+      provider: verbs
+      hcaPort: 1
+      gidIndex: 0
+      fallbackMock: false
     ucxTls: rc_verbs,ud_verbs,tcp,self
     ucxNetDevices: ""
     socketDir: /tmp/rdma
@@ -73,6 +80,8 @@ rdma:
     maxConnections: 8
     timeout: 300s
     enablePayloadRDMA: false
+    enableNativeVolumeRDMA: true
+    nativeRDMAServiceLevel: 0
     debug: true
     resources:
       requests:

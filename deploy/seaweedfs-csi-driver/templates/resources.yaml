@@ -327,6 +327,13 @@ spec:
             - {{ .Values.rdma.workerSidecar.port | quote }}
             - --engine-socket
             - {{ .Values.rdma.workerEngine.socketPath | quote }}
+            {{ if .Values.rdma.workerSidecar.enableNativeVolumeRDMA }}
+            - --native-engine-socket
+            - {{ .Values.rdma.workerEngine.nativeVolume.socketPath | quote }}
+            - --enable-native-volume-rdma=true
+            - --native-rdma-service-level
+            - {{ .Values.rdma.workerSidecar.nativeRDMAServiceLevel | quote }}
+            {{ end }}
             - --volume-server
             - "http://127.0.0.1:8444"
             - --enable-rdma=true
@@ -355,26 +362,33 @@ spec:
           image: {{ .Values.rdma.workerEngine.image }}
           imagePullPolicy: {{ .Values.rdma.workerEngine.imagePullPolicy }}
           command:
-            - ./rdma-engine-server
-            {{ if .Values.rdma.workerEngine.debug }}
-            - --debug
-            {{ end }}
-            {{ if .Values.rdma.workerEngine.deviceName }}
-            - --device
-            - {{ .Values.rdma.workerEngine.deviceName | quote }}
-            {{ end }}
-            - --ipc-socket
-            - {{ .Values.rdma.workerEngine.socketPath | quote }}
-            - --port
-            - {{ .Values.rdma.workerEngine.port | quote }}
-            {{ if .Values.rdma.workerEngine.realInitRetries }}
-            - --real-init-retries
-            - {{ .Values.rdma.workerEngine.realInitRetries | quote }}
-            {{ end }}
-            {{ if .Values.rdma.workerEngine.realInitRetryIntervalMs }}
-            - --real-init-retry-interval-ms
-            - {{ .Values.rdma.workerEngine.realInitRetryIntervalMs | quote }}
-            {{ end }}
+            - /bin/sh
+            - -ec
+            - |
+              {{ if .Values.rdma.workerEngine.nativeVolume.enabled }}
+              volume_args={{ printf "--socket %s --provider %s --device %s --port %v --gid-index %v" .Values.rdma.workerEngine.nativeVolume.socketPath .Values.rdma.workerEngine.nativeVolume.provider (default "auto" .Values.rdma.workerEngine.deviceName) .Values.rdma.workerEngine.nativeVolume.hcaPort .Values.rdma.workerEngine.nativeVolume.gidIndex | quote }}
+              {{ if .Values.rdma.workerEngine.nativeVolume.fallbackMock }}
+              volume_args="$volume_args --fallback-mock"
+              {{ end }}
+              {{ if .Values.rdma.workerEngine.debug }}
+              volume_args="$volume_args --debug"
+              {{ end }}
+              ./volume-rdma-engine $volume_args &
+              {{ end }}
+              engine_args={{ printf "--ipc-socket %s --port %v" .Values.rdma.workerEngine.socketPath .Values.rdma.workerEngine.port | quote }}
+              {{ if .Values.rdma.workerEngine.debug }}
+              engine_args="$engine_args --debug"
+              {{ end }}
+              {{ if .Values.rdma.workerEngine.deviceName }}
+              engine_args="$engine_args --device {{ .Values.rdma.workerEngine.deviceName }}"
+              {{ end }}
+              {{ if .Values.rdma.workerEngine.realInitRetries }}
+              engine_args="$engine_args --real-init-retries {{ .Values.rdma.workerEngine.realInitRetries }}"
+              {{ end }}
+              {{ if .Values.rdma.workerEngine.realInitRetryIntervalMs }}
+              engine_args="$engine_args --real-init-retry-interval-ms {{ .Values.rdma.workerEngine.realInitRetryIntervalMs }}"
+              {{ end }}
+              exec ./rdma-engine-server $engine_args
           env:
             {{ if .Values.rdma.workerEngine.ucxTls }}
             - name: UCX_TLS

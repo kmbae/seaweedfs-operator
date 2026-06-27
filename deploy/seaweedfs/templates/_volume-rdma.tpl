@@ -9,24 +9,28 @@ Usage: {{- include "seaweedfs.rdmaVolumeGroup" . | nindent 4 }}
   image: {{ printf "%s/rdma-engine:%s" .Values.rdma.registry .Values.rdma.engineTag }}
   imagePullPolicy: {{ .Values.rdma.imagePullPolicy }}
   command:
-    - ./rdma-engine-server
-    - --debug
-    {{- if .Values.rdma.deviceName }}
-    - --device
-    - {{ .Values.rdma.deviceName | quote }}
-    {{- end }}
-    - --ipc-socket
-    - /tmp/rdma/rdma-engine.sock
-    - --port
-    - {{ .Values.rdma.listenPort | quote }}
-    {{- if .Values.rdma.realInitRetries }}
-    - --real-init-retries
-    - {{ .Values.rdma.realInitRetries | quote }}
-    {{- end }}
-    {{- if .Values.rdma.realInitRetryIntervalMs }}
-    - --real-init-retry-interval-ms
-    - {{ .Values.rdma.realInitRetryIntervalMs | quote }}
-    {{- end }}
+    - /bin/sh
+    - -ec
+    - |
+      {{ if .Values.rdma.nativeVolume.enabled }}
+      volume_args={{ printf "--socket %s --provider %s --device %s --port %v --gid-index %v" .Values.rdma.nativeVolume.socketPath .Values.rdma.nativeVolume.provider (default "auto" .Values.rdma.deviceName) .Values.rdma.nativeVolume.hcaPort .Values.rdma.nativeVolume.gidIndex | quote }}
+      {{ if .Values.rdma.nativeVolume.fallbackMock }}
+      volume_args="$volume_args --fallback-mock"
+      {{ end }}
+      volume_args="$volume_args --debug"
+      ./volume-rdma-engine $volume_args &
+      {{ end }}
+      engine_args={{ printf "--ipc-socket /tmp/rdma/rdma-engine.sock --port %v --debug" .Values.rdma.listenPort | quote }}
+      {{ if .Values.rdma.deviceName }}
+      engine_args="$engine_args --device {{ .Values.rdma.deviceName }}"
+      {{ end }}
+      {{ if .Values.rdma.realInitRetries }}
+      engine_args="$engine_args --real-init-retries {{ .Values.rdma.realInitRetries }}"
+      {{ end }}
+      {{ if .Values.rdma.realInitRetryIntervalMs }}
+      engine_args="$engine_args --real-init-retry-interval-ms {{ .Values.rdma.realInitRetryIntervalMs }}"
+      {{ end }}
+      exec ./rdma-engine-server $engine_args
   env:
     {{- if eq $rdmaMode "hostPF" }}
     - name: POD_IP
@@ -122,6 +126,11 @@ Usage: {{- include "seaweedfs.rdmaVolumeGroup" . | nindent 4 }}
   args:
     - --port=8081
     - --engine-socket=/tmp/rdma/rdma-engine.sock
+    {{- if .Values.rdma.enableNativeVolumeRDMA }}
+    - --native-engine-socket={{ .Values.rdma.nativeVolume.socketPath }}
+    - --enable-native-volume-rdma=true
+    - --native-rdma-service-level={{ .Values.rdma.nativeVolume.serviceLevel }}
+    {{- end }}
     {{- if eq $rdmaMode "hostPF" }}
     - --volume-server=http://$(POD_IP):8444
     {{- else }}
@@ -168,24 +177,28 @@ sidecars:
     image: {{ printf "%s/rdma-engine:%s" .Values.rdma.registry .Values.rdma.engineTag }}
     imagePullPolicy: {{ .Values.rdma.imagePullPolicy }}
     command:
-      - ./rdma-engine-server
-      - --debug
-      {{- if .Values.rdma.deviceName }}
-      - --device
-      - {{ .Values.rdma.deviceName | quote }}
-      {{- end }}
-      - --ipc-socket
-      - /tmp/rdma/rdma-engine.sock
-      - --port
-      - {{ .Values.rdma.listenPort | quote }}
-      {{- if .Values.rdma.realInitRetries }}
-      - --real-init-retries
-      - {{ .Values.rdma.realInitRetries | quote }}
-      {{- end }}
-      {{- if .Values.rdma.realInitRetryIntervalMs }}
-      - --real-init-retry-interval-ms
-      - {{ .Values.rdma.realInitRetryIntervalMs | quote }}
-      {{- end }}
+      - /bin/sh
+      - -ec
+      - |
+        {{ if .Values.rdma.nativeVolume.enabled }}
+        volume_args={{ printf "--socket %s --provider %s --device %s --port %v --gid-index %v" .Values.rdma.nativeVolume.socketPath .Values.rdma.nativeVolume.provider (default "auto" .Values.rdma.deviceName) .Values.rdma.nativeVolume.hcaPort .Values.rdma.nativeVolume.gidIndex | quote }}
+        {{ if .Values.rdma.nativeVolume.fallbackMock }}
+        volume_args="$volume_args --fallback-mock"
+        {{ end }}
+        volume_args="$volume_args --debug"
+        ./volume-rdma-engine $volume_args &
+        {{ end }}
+        engine_args={{ printf "--ipc-socket /tmp/rdma/rdma-engine.sock --port %v --debug" .Values.rdma.listenPort | quote }}
+        {{ if .Values.rdma.deviceName }}
+        engine_args="$engine_args --device {{ .Values.rdma.deviceName }}"
+        {{ end }}
+        {{ if .Values.rdma.realInitRetries }}
+        engine_args="$engine_args --real-init-retries {{ .Values.rdma.realInitRetries }}"
+        {{ end }}
+        {{ if .Values.rdma.realInitRetryIntervalMs }}
+        engine_args="$engine_args --real-init-retry-interval-ms {{ .Values.rdma.realInitRetryIntervalMs }}"
+        {{ end }}
+        exec ./rdma-engine-server $engine_args
     env:
       {{- if eq $rdmaMode "hostPF" }}
       - name: POD_IP
@@ -281,6 +294,11 @@ sidecars:
     args:
       - --port=8081
       - --engine-socket=/tmp/rdma/rdma-engine.sock
+      {{- if .Values.rdma.enableNativeVolumeRDMA }}
+      - --native-engine-socket={{ .Values.rdma.nativeVolume.socketPath }}
+      - --enable-native-volume-rdma=true
+      - --native-rdma-service-level={{ .Values.rdma.nativeVolume.serviceLevel }}
+      {{- end }}
       {{- if eq $rdmaMode "hostPF" }}
       - --volume-server=http://$(POD_IP):8444
       {{- else }}
