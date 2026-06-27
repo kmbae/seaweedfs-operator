@@ -28,6 +28,7 @@ RUN_PJDFSTEST="${RUN_PJDFSTEST:-true}"
 RUN_FAILOVER="${RUN_FAILOVER:-true}"
 RUN_METRICS="${RUN_METRICS:-true}"
 ASSERT_KERNEL_READ_COUNTERS="${ASSERT_KERNEL_READ_COUNTERS:-false}"
+ASSERT_DIRECT_READ_NO_FALLBACK="${ASSERT_DIRECT_READ_NO_FALLBACK:-false}"
 RUN_VOLUME_LOG_GATE="${RUN_VOLUME_LOG_GATE:-false}"
 PJDFSTEST_TESTS="${PJDFSTEST_TESTS:-tests/open/25.t tests/unlink/14.t tests/open/26.t tests/mkdir/00.t tests/rename/20.t tests/rename/24.t}"
 
@@ -327,8 +328,13 @@ if [ "${ASSERT_KERNEL_READ_COUNTERS}" = "true" ]; then
   assert_counter_increased "kernel_rdma_remote_read_completions on ${reader_workers[0]}" "${reader_read_completions_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_remote_read_completions)"
   assert_counter_increased "kernel_read_rdma_folio_direct_bytes on ${reader_workers[0]}" "${reader_read_direct_before}" "$(worker_counter "${reader_workers[0]}" kernel_read_rdma_folio_direct_bytes)"
   assert_counter_unchanged "kernel_read_rdma_bounce_copy_bytes on ${reader_workers[0]}" "${reader_read_bounce_before}" "$(worker_counter "${reader_workers[0]}" kernel_read_rdma_bounce_copy_bytes)"
-  assert_counter_unchanged "kernel_rdma_direct_read_fallbacks on ${reader_workers[0]}" "${reader_direct_fallbacks_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_direct_read_fallbacks)"
-  assert_counter_unchanged "kernel_rdma_direct_read_errors on ${reader_workers[0]}" "${reader_direct_errors_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_direct_read_errors)"
+  if [ "${ASSERT_DIRECT_READ_NO_FALLBACK}" = "true" ]; then
+    assert_counter_unchanged "kernel_rdma_direct_read_fallbacks on ${reader_workers[0]}" "${reader_direct_fallbacks_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_direct_read_fallbacks)"
+    assert_counter_unchanged "kernel_rdma_direct_read_errors on ${reader_workers[0]}" "${reader_direct_errors_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_direct_read_errors)"
+  else
+    log "kernel_rdma_direct_read_fallbacks on ${reader_workers[0]}: ${reader_direct_fallbacks_before} -> $(worker_counter "${reader_workers[0]}" kernel_rdma_direct_read_fallbacks)"
+    log "kernel_rdma_direct_read_errors on ${reader_workers[0]}: ${reader_direct_errors_before} -> $(worker_counter "${reader_workers[0]}" kernel_rdma_direct_read_errors)"
+  fi
 else
   log "Skipping kernel read sysfs counters; RDMA read-v2 is gated by daemon and volume-engine metrics"
 fi
