@@ -94,8 +94,8 @@ rdma:
   # hostPF: use the node's host RDMA PF for lab validation while VF LID/UFM is unresolved.
   mode: hostPF
   registry: kmbae27
-  sidecarTag: rdma-20260628-2c36f7c7f
-  engineTag: rdma-20260628-4ac2a95b0
+  sidecarTag: rdma-20260628-100246c54
+  engineTag: rdma-20260628-100246c54
   imagePullPolicy: Always
   enablePayloadRDMA: true
   enableNativeVolumeRDMA: true
