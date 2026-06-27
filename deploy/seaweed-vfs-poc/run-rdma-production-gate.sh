@@ -136,6 +136,16 @@ assert_counter_increased() {
   log "OK: ${label} increased (${before} -> ${after})"
 }
 
+assert_counter_unchanged() {
+  local label=$1
+  local before=$2
+  local after=$3
+  if [ "${after}" -ne "${before}" ]; then
+    die "${label} changed: before=${before} after=${after}"
+  fi
+  log "OK: ${label} unchanged (${after})"
+}
+
 log "Resolving pods"
 read -r -a reader_nodes <<<"${READER_NODES}"
 writer_client="$(client_pod "${WRITER_NODE}")"
@@ -165,6 +175,8 @@ smoke_file="${test_dir}/payload.bin"
 fio_file="${test_dir}/fio.bin"
 writer_write_ops_before="$(worker_counter "${writer_worker}" kernel_write_rdma_ops)"
 writer_write_completions_before="$(worker_counter "${writer_worker}" kernel_rdma_remote_write_completions)"
+writer_write_direct_before="$(worker_counter "${writer_worker}" kernel_write_rdma_direct_iter_bytes)"
+writer_write_bounce_before="$(worker_counter "${writer_worker}" kernel_write_rdma_bounce_copy_bytes)"
 reader_read_desc_before="$(worker_counter "${reader_workers[0]}" kernel_read_rdma_desc_ops)"
 reader_read_completions_before="$(worker_counter "${reader_workers[0]}" kernel_rdma_remote_read_completions)"
 
@@ -209,6 +221,8 @@ fi
 
 assert_counter_increased "kernel_write_rdma_ops on ${writer_worker}" "${writer_write_ops_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_ops)"
 assert_counter_increased "kernel_rdma_remote_write_completions on ${writer_worker}" "${writer_write_completions_before}" "$(worker_counter "${writer_worker}" kernel_rdma_remote_write_completions)"
+assert_counter_increased "kernel_write_rdma_direct_iter_bytes on ${writer_worker}" "${writer_write_direct_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_direct_iter_bytes)"
+assert_counter_unchanged "kernel_write_rdma_bounce_copy_bytes on ${writer_worker}" "${writer_write_bounce_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_bounce_copy_bytes)"
 assert_counter_increased "kernel_read_rdma_desc_ops on ${reader_workers[0]}" "${reader_read_desc_before}" "$(worker_counter "${reader_workers[0]}" kernel_read_rdma_desc_ops)"
 assert_counter_increased "kernel_rdma_remote_read_completions on ${reader_workers[0]}" "${reader_read_completions_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_remote_read_completions)"
 
