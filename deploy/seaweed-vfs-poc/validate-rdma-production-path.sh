@@ -188,7 +188,14 @@ run_optional_failover() {
   exec_sh "$replacement" "grep -q ' ${MNT} ' /proc/mounts && grep ' ${MNT} ' /proc/mounts"
   if [ -n "$expected_sha" ]; then
     local replacement_sha
-    replacement_sha="$(exec_sh "$replacement" "dd if='${file}' bs='${READ_BS_MB}'M status=none | sha256sum | awk '{print \$1}'")"
+    replacement_sha=""
+    for _ in $(seq 1 60); do
+      replacement_sha="$(exec_sh "$replacement" "dd if='${file}' bs='${READ_BS_MB}'M status=none | sha256sum | awk '{print \$1}'" 2>/dev/null || true)"
+      if [ "$replacement_sha" = "$expected_sha" ]; then
+        break
+      fi
+      sleep 2
+    done
     if [ "$replacement_sha" != "$expected_sha" ]; then
       echo "ERROR: checksum mismatch after failover: expected=${expected_sha} got=${replacement_sha}" >&2
       exit 1
