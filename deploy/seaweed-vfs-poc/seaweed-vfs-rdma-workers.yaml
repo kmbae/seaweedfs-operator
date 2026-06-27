@@ -102,7 +102,7 @@ spec:
               fi
               if lsmod | grep -q '^seaweedvfs '; then
                 fresh_module=true
-                for param in rdma_read_window_ios kernel_write_rdma_direct_iter_bytes kernel_write_rdma_bounce_copy_bytes; do
+                for param in rdma_read_window_ios kernel_read_rdma_folio_direct_ops kernel_read_rdma_folio_direct_bytes kernel_write_rdma_direct_iter_bytes kernel_write_rdma_bounce_copy_bytes; do
                   [ -e "/sys/module/seaweedvfs/parameters/${param}" ] || fresh_module=false
                 done
                 if [ "${fresh_module}" = "true" ]; then
@@ -129,7 +129,7 @@ spec:
                     ;;
                   esac
               done
-              for param in rdma_read_window_ios kernel_write_rdma_direct_iter_bytes kernel_write_rdma_bounce_copy_bytes; do
+              for param in rdma_read_window_ios kernel_read_rdma_folio_direct_ops kernel_read_rdma_folio_direct_bytes kernel_write_rdma_direct_iter_bytes kernel_write_rdma_bounce_copy_bytes; do
                 [ -e "/sys/module/seaweedvfs/parameters/${param}" ] || {
                   echo "ERROR: seaweedvfs parameter ${param} is missing; stale kernel module is loaded" >&2
                   exit 1

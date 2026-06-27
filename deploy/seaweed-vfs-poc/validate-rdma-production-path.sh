@@ -49,6 +49,7 @@ print_kernel_counters() {
       kernel_read_daemon_submit_ns kernel_read_reply_copy_bytes \
       kernel_read_rdma_desc_ops kernel_read_rdma_desc_ns \
       kernel_read_rdma_wr_ns kernel_read_rdma_bounce_copy_bytes \
+      kernel_read_rdma_folio_direct_ops kernel_read_rdma_folio_direct_bytes \
       kernel_read_window_cache_hits kernel_read_window_cache_misses \
       kernel_read_window_cache_bytes \
       kernel_rdma_remote_read_posts kernel_rdma_remote_read_completions \
@@ -248,12 +249,15 @@ main() {
   local src_write_ops_before src_write_completions_before
   local src_write_direct_before src_write_bounce_before
   local dst_read_desc_before dst_read_completions_before
+  local dst_read_direct_before dst_read_bounce_before
   src_write_ops_before="$(counter_value "$src" kernel_write_rdma_ops)"
   src_write_completions_before="$(counter_value "$src" kernel_rdma_remote_write_completions)"
   src_write_direct_before="$(counter_value "$src" kernel_write_rdma_direct_iter_bytes)"
   src_write_bounce_before="$(counter_value "$src" kernel_write_rdma_bounce_copy_bytes)"
   dst_read_desc_before="$(counter_value "$dst" kernel_read_rdma_desc_ops)"
   dst_read_completions_before="$(counter_value "$dst" kernel_rdma_remote_read_completions)"
+  dst_read_direct_before="$(counter_value "$dst" kernel_read_rdma_folio_direct_bytes)"
+  dst_read_bounce_before="$(counter_value "$dst" kernel_read_rdma_bounce_copy_bytes)"
   run_read_write_smoke "$src" "$dst"
   run_optional_fio "$dst"
   run_optional_pjdfstest "$dst"
@@ -263,6 +267,8 @@ main() {
   assert_counter_unchanged "kernel_write_rdma_bounce_copy_bytes on writer" "$src_write_bounce_before" "$(counter_value "$src" kernel_write_rdma_bounce_copy_bytes)"
   assert_counter_increased "kernel_read_rdma_desc_ops on reader" "$dst_read_desc_before" "$(counter_value "$dst" kernel_read_rdma_desc_ops)"
   assert_counter_increased "kernel_rdma_remote_read_completions on reader" "$dst_read_completions_before" "$(counter_value "$dst" kernel_rdma_remote_read_completions)"
+  assert_counter_increased "kernel_read_rdma_folio_direct_bytes on reader" "$dst_read_direct_before" "$(counter_value "$dst" kernel_read_rdma_folio_direct_bytes)"
+  assert_counter_unchanged "kernel_read_rdma_bounce_copy_bytes on reader" "$dst_read_bounce_before" "$(counter_value "$dst" kernel_read_rdma_bounce_copy_bytes)"
   print_kernel_counters "$src"
   print_kernel_counters "$dst"
   print_daemon_metrics "$src"
