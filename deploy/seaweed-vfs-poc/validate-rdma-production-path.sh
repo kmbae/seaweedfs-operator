@@ -50,6 +50,8 @@ print_kernel_counters() {
       kernel_read_rdma_desc_ops kernel_read_rdma_desc_ns \
       kernel_read_rdma_wr_ns kernel_read_rdma_bounce_copy_bytes \
       kernel_read_rdma_folio_direct_ops kernel_read_rdma_folio_direct_bytes \
+      kernel_rdma_direct_read_ops kernel_rdma_direct_read_bytes \
+      kernel_rdma_direct_read_fallbacks kernel_rdma_direct_read_errors \
       kernel_read_window_cache_hits kernel_read_window_cache_misses \
       kernel_read_window_cache_bytes \
       kernel_rdma_remote_read_posts kernel_rdma_remote_read_completions \

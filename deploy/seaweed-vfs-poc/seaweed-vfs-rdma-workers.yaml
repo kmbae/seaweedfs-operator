@@ -60,7 +60,7 @@ spec:
         - operator: Exists
       containers:
         - name: swvfs-rdma-daemon
-          image: kmbae27/rdma-sidecar:rdma-20260627-metrics-1f07b31
+          image: kmbae27/rdma-sidecar:swvfs-20260627-direct-8bd8415fc
           imagePullPolicy: Always
           securityContext:
             privileged: true
@@ -102,9 +102,14 @@ spec:
               fi
               if lsmod | grep -q '^seaweedvfs '; then
                 fresh_module=true
-                for param in rdma_read_window_ios kernel_read_rdma_folio_direct_ops kernel_read_rdma_folio_direct_bytes kernel_write_rdma_direct_iter_bytes kernel_write_rdma_bounce_copy_bytes; do
+                for param in rdma_read_window_ios kernel_rdma_direct_reads kernel_rdma_direct_read_min_bytes kernel_rdma_direct_read_ops kernel_rdma_direct_read_bytes kernel_rdma_direct_read_fallbacks kernel_rdma_direct_read_errors kernel_read_rdma_folio_direct_ops kernel_read_rdma_folio_direct_bytes kernel_write_rdma_direct_iter_bytes kernel_write_rdma_bounce_copy_bytes; do
                   [ -e "/sys/module/seaweedvfs/parameters/${param}" ] || fresh_module=false
                 done
+                direct_reads="$(cat /sys/module/seaweedvfs/parameters/kernel_rdma_direct_reads 2>/dev/null || true)"
+                case "${direct_reads}" in
+                  Y|y|1|true|TRUE) ;;
+                  *) fresh_module=false ;;
+                esac
                 if [ "${fresh_module}" = "true" ]; then
                   echo "reusing already loaded fresh seaweedvfs module"
                 else
@@ -115,9 +120,9 @@ spec:
                 fi
               fi
               if ! lsmod | grep -q '^seaweedvfs '; then
-                modprobe seaweedvfs kernel_rdma=1 rdma_read_hints=1 rdma_write_hints=1 rdma_read_window_ios="${RDMA_READ_WINDOW_IOS:-4}"
+                modprobe seaweedvfs kernel_rdma=1 kernel_rdma_direct_reads="${KERNEL_RDMA_DIRECT_READS:-1}" kernel_rdma_direct_read_min_bytes="${KERNEL_RDMA_DIRECT_READ_MIN_BYTES:-262144}" rdma_read_hints=1 rdma_write_hints=1 rdma_read_window_ios="${RDMA_READ_WINDOW_IOS:-4}"
               fi
-              for param in kernel_rdma rdma_read_hints rdma_write_hints; do
+              for param in kernel_rdma kernel_rdma_direct_reads rdma_read_hints rdma_write_hints; do
                 value="$(cat "/sys/module/seaweedvfs/parameters/${param}" 2>/dev/null || true)"
                 case "${value}" in
                   Y|y|1|true|TRUE)
@@ -129,7 +134,7 @@ spec:
                     ;;
                   esac
               done
-              for param in rdma_read_window_ios kernel_read_rdma_folio_direct_ops kernel_read_rdma_folio_direct_bytes kernel_write_rdma_direct_iter_bytes kernel_write_rdma_bounce_copy_bytes; do
+              for param in rdma_read_window_ios kernel_rdma_direct_read_min_bytes kernel_rdma_direct_read_ops kernel_rdma_direct_read_bytes kernel_rdma_direct_read_fallbacks kernel_rdma_direct_read_errors kernel_read_rdma_folio_direct_ops kernel_read_rdma_folio_direct_bytes kernel_write_rdma_direct_iter_bytes kernel_write_rdma_bounce_copy_bytes; do
                 [ -e "/sys/module/seaweedvfs/parameters/${param}" ] || {
                   echo "ERROR: seaweedvfs parameter ${param} is missing; stale kernel module is loaded" >&2
                   exit 1
@@ -202,6 +207,10 @@ spec:
               value: "1048576"
             - name: RDMA_READ_WINDOW_IOS
               value: "4"
+            - name: KERNEL_RDMA_DIRECT_READS
+              value: "1"
+            - name: KERNEL_RDMA_DIRECT_READ_MIN_BYTES
+              value: "262144"
             - name: RDMA_CONTROL_LISTEN
               value: :18084
             - name: RDMA_PEER_ENDPOINTS

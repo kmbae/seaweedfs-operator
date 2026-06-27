@@ -263,6 +263,10 @@ reader_read_desc_before="$(worker_counter "${reader_workers[0]}" kernel_read_rdm
 reader_read_completions_before="$(worker_counter "${reader_workers[0]}" kernel_rdma_remote_read_completions)"
 reader_read_direct_before="$(worker_counter "${reader_workers[0]}" kernel_read_rdma_folio_direct_bytes)"
 reader_read_bounce_before="$(worker_counter "${reader_workers[0]}" kernel_read_rdma_bounce_copy_bytes)"
+reader_direct_ops_before="$(worker_counter "${reader_workers[0]}" kernel_rdma_direct_read_ops)"
+reader_direct_bytes_before="$(worker_counter "${reader_workers[0]}" kernel_rdma_direct_read_bytes)"
+reader_direct_fallbacks_before="$(worker_counter "${reader_workers[0]}" kernel_rdma_direct_read_fallbacks)"
+reader_direct_errors_before="$(worker_counter "${reader_workers[0]}" kernel_rdma_direct_read_errors)"
 
 if [ "${RUN_METRICS}" = "true" ]; then
   log "Capturing RDMA metrics baseline"
@@ -317,10 +321,14 @@ assert_counter_increased "kernel_rdma_remote_write_completions on ${writer_worke
 assert_counter_increased "kernel_write_rdma_direct_iter_bytes on ${writer_worker}" "${writer_write_direct_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_direct_iter_bytes)"
 assert_counter_unchanged "kernel_write_rdma_bounce_copy_bytes on ${writer_worker}" "${writer_write_bounce_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_bounce_copy_bytes)"
 if [ "${ASSERT_KERNEL_READ_COUNTERS}" = "true" ]; then
+  assert_counter_increased "kernel_rdma_direct_read_ops on ${reader_workers[0]}" "${reader_direct_ops_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_direct_read_ops)"
+  assert_counter_increased "kernel_rdma_direct_read_bytes on ${reader_workers[0]}" "${reader_direct_bytes_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_direct_read_bytes)"
   assert_counter_increased "kernel_read_rdma_desc_ops on ${reader_workers[0]}" "${reader_read_desc_before}" "$(worker_counter "${reader_workers[0]}" kernel_read_rdma_desc_ops)"
   assert_counter_increased "kernel_rdma_remote_read_completions on ${reader_workers[0]}" "${reader_read_completions_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_remote_read_completions)"
   assert_counter_increased "kernel_read_rdma_folio_direct_bytes on ${reader_workers[0]}" "${reader_read_direct_before}" "$(worker_counter "${reader_workers[0]}" kernel_read_rdma_folio_direct_bytes)"
   assert_counter_unchanged "kernel_read_rdma_bounce_copy_bytes on ${reader_workers[0]}" "${reader_read_bounce_before}" "$(worker_counter "${reader_workers[0]}" kernel_read_rdma_bounce_copy_bytes)"
+  assert_counter_unchanged "kernel_rdma_direct_read_fallbacks on ${reader_workers[0]}" "${reader_direct_fallbacks_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_direct_read_fallbacks)"
+  assert_counter_unchanged "kernel_rdma_direct_read_errors on ${reader_workers[0]}" "${reader_direct_errors_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_direct_read_errors)"
 else
   log "Skipping kernel read sysfs counters; RDMA read-v2 is gated by daemon and volume-engine metrics"
 fi
