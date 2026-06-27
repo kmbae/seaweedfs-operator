@@ -113,11 +113,11 @@ run_read_write_smoke() {
 
   echo "== write ${SIZE_MB}MiB from ${src} =="
   exec_sh "$src" "
-    { time dd if=/dev/zero of='${file}' bs=1M count='${SIZE_MB}' conv=fsync status=none; } 2>&1
+    { time dd if=/dev/urandom of='${file}' bs=1M count='${SIZE_MB}' conv=fsync status=none; } 2>&1
     bytes=\$(stat -c %s '${file}')
     printf 'bytes=%s\n' \"\$bytes\"
   "
-  sum_src="$(exec_sh "$src" "dd if=/dev/zero bs=1M count='${SIZE_MB}' status=none | sha256sum | awk '{print \$1}'")"
+  sum_src="$(exec_sh "$src" "sha256sum '${file}' | awk '{print \$1}'")"
 
   echo "== large-block read ${SIZE_MB}MiB from ${dst} =="
   exec_sh "$dst" "
