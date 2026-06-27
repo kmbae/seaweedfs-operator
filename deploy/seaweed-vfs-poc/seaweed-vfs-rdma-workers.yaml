@@ -3,6 +3,25 @@ kind: Namespace
 metadata:
   name: seaweed-vfs-poc
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: seaweed-vfs-rdma-peer
+  namespace: seaweed-vfs-poc
+  labels:
+    app.kubernetes.io/name: seaweed-vfs-rdma-peer
+    app.kubernetes.io/part-of: seaweed-vfs-poc
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/name: seaweed-vfs-rdma-node-workers
+    app.kubernetes.io/part-of: seaweed-vfs-poc
+  ports:
+    - name: rdma-control
+      port: 18084
+      targetPort: rdma-control
+---
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -75,8 +94,8 @@ spec:
               trap term TERM INT
 
               modprobe -r seaweedvfs 2>/dev/null || true
-              modprobe seaweedvfs rdma_read_hints=1 rdma_write_hints=1
-              for param in rdma_read_hints rdma_write_hints; do
+              modprobe seaweedvfs kernel_rdma=1 rdma_read_hints=1 rdma_write_hints=1
+              for param in kernel_rdma rdma_read_hints rdma_write_hints; do
                 value="$(cat "/sys/module/seaweedvfs/parameters/${param}" 2>/dev/null || true)"
                 case "${value}" in
                   Y|y|1|true|TRUE)
@@ -107,6 +126,11 @@ spec:
                 --enable-payload-rdma="${ENABLE_PAYLOAD_RDMA:-false}" \
                 --rdma-read-min-size="${RDMA_READ_MIN_SIZE:-8388608}" \
                 --rdma-write-min-size="${RDMA_WRITE_MIN_SIZE:-8388608}" \
+                --rdma-control-listen="${RDMA_CONTROL_LISTEN:-:18084}" \
+                --rdma-peer-endpoints="${RDMA_PEER_ENDPOINTS:-http://seaweed-vfs-rdma-peer.seaweed-vfs-poc.svc.cluster.local:18084}" \
+                --rdma-peer-connect-interval="${RDMA_PEER_CONNECT_INTERVAL:-5s}" \
+                --rdma-peer-connect-timeout="${RDMA_PEER_CONNECT_TIMEOUT:-5s}" \
+                --rdma-peer-service-level="${RDMA_PEER_SERVICE_LEVEL:-0}" \
                 --fallback-on-error=true \
                 --timeout=300s \
                 --max-connections=8 \
@@ -147,6 +171,20 @@ spec:
               value: "0"
             - name: RDMA_WRITE_MIN_SIZE
               value: "0"
+            - name: RDMA_CONTROL_LISTEN
+              value: :18084
+            - name: RDMA_PEER_ENDPOINTS
+              value: http://seaweed-vfs-rdma-peer.seaweed-vfs-poc.svc.cluster.local:18084
+            - name: RDMA_PEER_CONNECT_INTERVAL
+              value: 5s
+            - name: RDMA_PEER_CONNECT_TIMEOUT
+              value: 5s
+            - name: RDMA_PEER_SERVICE_LEVEL
+              value: "0"
+          ports:
+            - name: rdma-control
+              containerPort: 18084
+              protocol: TCP
           readinessProbe:
             exec:
               command:
