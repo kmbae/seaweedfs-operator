@@ -74,7 +74,7 @@ rdma:
         memory: 1Gi
   workerSidecar:
     enabled: true
-    image: kmbae27/rdma-sidecar:rdma-20260628-c4cbcaa7
+    image: kmbae27/rdma-sidecar:rdma-20260628-c75fde18
     imagePullPolicy: Always
     port: 18082
     maxConnections: 8
