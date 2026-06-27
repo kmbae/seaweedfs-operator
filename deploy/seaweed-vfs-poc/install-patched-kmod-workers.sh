@@ -105,7 +105,7 @@ spec:
                 make clean >/dev/null 2>&1 || true
                 make
                 modinfo ./seaweedvfs.ko
-                modinfo -F parm ./seaweedvfs.ko | grep -E "rdma_(read|write)_hints"
+                modinfo -F parm ./seaweedvfs.ko | grep -E "kernel_rdma|rdma_(read|write)_hints"
                 install_dir="/lib/modules/\$(uname -r)/updates/dkms"
                 rm -f "\${install_dir}/seaweedvfs.ko" \
                   "\${install_dir}/seaweedvfs.ko.zst" \
@@ -114,7 +114,7 @@ spec:
                 install -D -m 0644 seaweedvfs.ko "\${install_dir}/seaweedvfs.ko"
                 depmod -a "\$(uname -r)"
                 modinfo seaweedvfs
-                modinfo -F parm seaweedvfs | grep -E "rdma_(read|write)_hints"
+                modinfo -F parm seaweedvfs | grep -E "kernel_rdma|rdma_(read|write)_hints"
               '
           volumeMounts:
             - name: kmod-source
