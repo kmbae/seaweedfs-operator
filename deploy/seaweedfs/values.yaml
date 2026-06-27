@@ -1,6 +1,6 @@
 # Seaweed CR name (defaults to Helm release name)
 name: ""
-image: kmbae27/seaweedfs:rdma-20260628-2c36f7c7f
+image: kmbae27/seaweedfs:rdma-20260628-28ca175ef
 volumeServerDiskCount: 1
 hostSuffix: ""
 labels: {}
@@ -95,7 +95,7 @@ rdma:
   mode: hostPF
   registry: kmbae27
   sidecarTag: rdma-20260628-100246c54
-  engineTag: rdma-20260628-100246c54
+  engineTag: rdma-20260628-28ca175ef
   imagePullPolicy: Always
   enablePayloadRDMA: true
   enableNativeVolumeRDMA: true
