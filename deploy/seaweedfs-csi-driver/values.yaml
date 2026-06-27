@@ -47,7 +47,7 @@ rdma:
     timeoutMs: 5000
   workerEngine:
     enabled: true
-    image: kmbae27/rdma-engine:rdma-20260628-2c36f7c7f
+    image: kmbae27/rdma-engine:rdma-20260628-4ac2a95b0
     imagePullPolicy: Always
     deviceName: ""
     nativeVolume:
