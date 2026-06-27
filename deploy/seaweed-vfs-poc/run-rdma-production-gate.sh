@@ -120,6 +120,22 @@ assert_log_absent() {
   fi
 }
 
+worker_counter() {
+  local pod=$1
+  local name=$2
+  exec_worker "${pod}" "cat '/sys/module/seaweedvfs/parameters/${name}' 2>/dev/null || printf 0"
+}
+
+assert_counter_increased() {
+  local label=$1
+  local before=$2
+  local after=$3
+  if [ "${after}" -le "${before}" ]; then
+    die "${label} did not increase: before=${before} after=${after}"
+  fi
+  log "OK: ${label} increased (${before} -> ${after})"
+}
+
 log "Resolving pods"
 read -r -a reader_nodes <<<"${READER_NODES}"
 writer_client="$(client_pod "${WRITER_NODE}")"
@@ -147,6 +163,10 @@ since_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 test_dir="${CLIENT_MOUNT}/rdma-prod-gate-$(date +%Y%m%d-%H%M%S)"
 smoke_file="${test_dir}/payload.bin"
 fio_file="${test_dir}/fio.bin"
+writer_write_ops_before="$(worker_counter "${writer_worker}" kernel_write_rdma_ops)"
+writer_write_completions_before="$(worker_counter "${writer_worker}" kernel_rdma_remote_write_completions)"
+reader_read_desc_before="$(worker_counter "${reader_workers[0]}" kernel_read_rdma_desc_ops)"
+reader_read_completions_before="$(worker_counter "${reader_workers[0]}" kernel_rdma_remote_read_completions)"
 
 log "Smoke write on ${WRITER_NODE}: ${SMOKE_SIZE_MB}MiB"
 writer_sha="$(
@@ -186,6 +206,11 @@ if [ "${RUN_FIO}" = "true" ]; then
       --group_reporting
   "
 fi
+
+assert_counter_increased "kernel_write_rdma_ops on ${writer_worker}" "${writer_write_ops_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_ops)"
+assert_counter_increased "kernel_rdma_remote_write_completions on ${writer_worker}" "${writer_write_completions_before}" "$(worker_counter "${writer_worker}" kernel_rdma_remote_write_completions)"
+assert_counter_increased "kernel_read_rdma_desc_ops on ${reader_workers[0]}" "${reader_read_desc_before}" "$(worker_counter "${reader_workers[0]}" kernel_read_rdma_desc_ops)"
+assert_counter_increased "kernel_rdma_remote_read_completions on ${reader_workers[0]}" "${reader_read_completions_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_remote_read_completions)"
 
 log "Checking RDMA logs"
 writer_logs="$(kctl -n "${NS}" logs "${writer_worker}" -c "${WORKER_CONTAINER}" --since-time="${since_time}" || true)"

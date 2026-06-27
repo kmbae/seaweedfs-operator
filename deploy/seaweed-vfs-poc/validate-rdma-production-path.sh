@@ -82,6 +82,23 @@ print_daemon_metrics() {
   '
 }
 
+counter_value() {
+  local pod="$1"
+  local name="$2"
+  exec_sh "$pod" "cat '/sys/module/seaweedvfs/parameters/${name}' 2>/dev/null || printf 0"
+}
+
+assert_counter_increased() {
+  local label="$1"
+  local before="$2"
+  local after="$3"
+  if [ "${after}" -le "${before}" ]; then
+    echo "ERROR: ${label} did not increase: before=${before} after=${after}" >&2
+    exit 1
+  fi
+  echo "OK: ${label} increased: before=${before} after=${after}"
+}
+
 require_ready() {
   kctl -n "$NS" rollout status ds/seaweed-vfs-rdma-node-workers --timeout=180s
   kctl -n "$NS" get pod -l "$SELECTOR" -o wide
@@ -216,9 +233,19 @@ main() {
 
   print_kernel_counters "$src"
   print_kernel_counters "$dst"
+  local src_write_ops_before src_write_completions_before
+  local dst_read_desc_before dst_read_completions_before
+  src_write_ops_before="$(counter_value "$src" kernel_write_rdma_ops)"
+  src_write_completions_before="$(counter_value "$src" kernel_rdma_remote_write_completions)"
+  dst_read_desc_before="$(counter_value "$dst" kernel_read_rdma_desc_ops)"
+  dst_read_completions_before="$(counter_value "$dst" kernel_rdma_remote_read_completions)"
   run_read_write_smoke "$src" "$dst"
   run_optional_fio "$dst"
   run_optional_pjdfstest "$dst"
+  assert_counter_increased "kernel_write_rdma_ops on writer" "$src_write_ops_before" "$(counter_value "$src" kernel_write_rdma_ops)"
+  assert_counter_increased "kernel_rdma_remote_write_completions on writer" "$src_write_completions_before" "$(counter_value "$src" kernel_rdma_remote_write_completions)"
+  assert_counter_increased "kernel_read_rdma_desc_ops on reader" "$dst_read_desc_before" "$(counter_value "$dst" kernel_read_rdma_desc_ops)"
+  assert_counter_increased "kernel_rdma_remote_read_completions on reader" "$dst_read_completions_before" "$(counter_value "$dst" kernel_rdma_remote_read_completions)"
   print_kernel_counters "$src"
   print_kernel_counters "$dst"
   print_daemon_metrics "$src"

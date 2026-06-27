@@ -60,7 +60,7 @@ spec:
         - operator: Exists
       containers:
         - name: swvfs-rdma-daemon
-          image: kmbae27/rdma-sidecar:rdma-20260627-prodpath-bc4516511-tools
+          image: kmbae27/rdma-sidecar:rdma-20260627-prodpath-42a7fb711-tools
           imagePullPolicy: Always
           securityContext:
             privileged: true
@@ -184,6 +184,12 @@ spec:
               value: 5s
             - name: RDMA_PEER_SERVICE_LEVEL
               value: "0"
+            - name: SWVFS_RDMA_MR_POOL_MAX_IDLE
+              value: "64"
+            - name: SWVFS_RDMA_MR_POOL_MAX_BYTES
+              value: "67108864"
+            - name: SWVFS_RDMA_MR_POOL_MIN_BYTES
+              value: "262144"
           ports:
             - name: rdma-control
               containerPort: 18084
