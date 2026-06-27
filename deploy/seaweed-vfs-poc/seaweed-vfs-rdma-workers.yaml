@@ -93,8 +93,20 @@ spec:
               }
               trap term TERM INT
 
-              modprobe -r seaweedvfs 2>/dev/null || true
-              modprobe seaweedvfs kernel_rdma=1 rdma_read_hints=1 rdma_write_hints=1
+              if grep -q " ${MNT} " /proc/mounts; then
+                echo "removing stale SeaweedVFS mount at ${MNT}"
+                umount "${MNT}" 2>/dev/null || umount -l "${MNT}" 2>/dev/null || {
+                  echo "ERROR: failed to unmount stale SeaweedVFS mount at ${MNT}" >&2
+                  exit 1
+                }
+              fi
+              if lsmod | grep -q '^seaweedvfs '; then
+                modprobe -r seaweedvfs || {
+                  echo "ERROR: failed to unload existing seaweedvfs module; a stale mount or process is still using it" >&2
+                  exit 1
+                }
+              fi
+              modprobe seaweedvfs kernel_rdma=1 rdma_read_hints=1 rdma_write_hints=1 rdma_read_window_ios="${RDMA_READ_WINDOW_IOS:-4}"
               for param in kernel_rdma rdma_read_hints rdma_write_hints; do
                 value="$(cat "/sys/module/seaweedvfs/parameters/${param}" 2>/dev/null || true)"
                 case "${value}" in
@@ -105,7 +117,13 @@ spec:
                     echo "ERROR: seaweedvfs ${param} is not enabled; got '${value}'" >&2
                     exit 1
                     ;;
-                esac
+                  esac
+              done
+              for param in rdma_read_window_ios kernel_write_rdma_direct_iter_bytes kernel_write_rdma_bounce_copy_bytes; do
+                [ -e "/sys/module/seaweedvfs/parameters/${param}" ] || {
+                  echo "ERROR: seaweedvfs parameter ${param} is missing; stale kernel module is loaded" >&2
+                  exit 1
+                }
               done
               i=0
               while [ ! -e /dev/seaweedvfs ] && [ "${i}" -lt 100 ]; do
@@ -172,6 +190,8 @@ spec:
               value: "262144"
             - name: RDMA_WRITE_MIN_SIZE
               value: "1048576"
+            - name: RDMA_READ_WINDOW_IOS
+              value: "4"
             - name: RDMA_CONTROL_LISTEN
               value: :18084
             - name: RDMA_PEER_ENDPOINTS
