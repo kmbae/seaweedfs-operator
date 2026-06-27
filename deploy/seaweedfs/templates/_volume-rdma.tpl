@@ -38,6 +38,8 @@ Usage: {{- include "seaweedfs.rdmaVolumeGroup" . | nindent 4 }}
       value: "http://127.0.0.1:8081/local-volume"
     - name: VOLUME_SERVER_GRPC_URL
       value: "http://$(POD_IP):8444"
+    - name: SEAWEEDFS_RDMA_VOLUME_GRPC_READ
+      value: "true"
     - name: VOLUME_DATA_DIR
       value: "/data0"
     - name: VOLUME_IDX_DIR
@@ -187,6 +189,8 @@ sidecars:
         value: "http://127.0.0.1:8081/local-volume"
       - name: VOLUME_SERVER_GRPC_URL
         value: "http://$(POD_IP):8444"
+      - name: SEAWEEDFS_RDMA_VOLUME_GRPC_READ
+        value: "true"
       - name: VOLUME_DATA_DIR
         value: "/data0"
       - name: VOLUME_IDX_DIR

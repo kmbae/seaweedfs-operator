@@ -1,6 +1,6 @@
 # Seaweed CR name (defaults to Helm release name)
 name: ""
-image: kmbae27/seaweedfs:rdma-20260625-7f092413
+image: kmbae27/seaweedfs:rdma-20260627-volgrpc-read-fc662fd
 volumeServerDiskCount: 1
 hostSuffix: ""
 labels: {}
@@ -95,7 +95,7 @@ rdma:
   mode: hostPF
   registry: kmbae27
   sidecarTag: rdma-20260627-persist-71d98bc7
-  engineTag: rdma-20260627-readcache-91ab11d6
+  engineTag: rdma-20260627-volgrpc-read-fc662fd
   imagePullPolicy: Always
   enablePayloadRDMA: true
   deviceName: mlx5_1

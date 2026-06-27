@@ -233,12 +233,14 @@ assert_counter_unchanged "kernel_read_rdma_bounce_copy_bytes on ${reader_workers
 log "Checking RDMA logs"
 for pod in "${reader_workers[@]}"; do
   logs="$(kctl -n "${NS}" logs "${pod}" -c "${WORKER_CONTAINER}" --since-time="${since_time}" || true)"
-  assert_log_contains "${logs}" "remote-rdma:local-volume-rust" "${pod}"
+  assert_log_contains "${logs}" "remote-rdma:volume-grpc-range" "${pod}"
   assert_log_contains "${logs}" "real_rdma=true" "${pod}"
 done
 
 volume_logs="$(kctl -n "${SEAWEED_NS}" logs "${VOLUME_POD}" -c "${VOLUME_CONTAINER}" --since-time="${since_time}" || true)"
 assert_log_absent "${volume_logs}" "direct volume gRPC write failed" "${VOLUME_POD}/${VOLUME_CONTAINER}"
+assert_log_absent "${volume_logs}" "volume ReadNeedleRange gRPC failed" "${VOLUME_POD}/${VOLUME_CONTAINER}"
+assert_log_absent "${volume_logs}" "local Rust volume read failed" "${VOLUME_POD}/${VOLUME_CONTAINER}"
 assert_log_contains "${volume_logs}" "RDMA GET from peer completed successfully" "${VOLUME_POD}/${VOLUME_CONTAINER}"
 assert_log_contains "${volume_logs}" "RDMA PUT to peer completed successfully" "${VOLUME_POD}/${VOLUME_CONTAINER}"
 

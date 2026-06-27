@@ -245,7 +245,7 @@ spec:
             - name: rdma-socket
               mountPath: /tmp/rdma
         - name: rdma-engine
-          image: kmbae27/rdma-engine:rdma-20260627-readcache-91ab11d6
+          image: kmbae27/rdma-engine:rdma-20260627-volgrpc-read-fc662fd
           imagePullPolicy: Always
           command:
             - ./rdma-engine-server

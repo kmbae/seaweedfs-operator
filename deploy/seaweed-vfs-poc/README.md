@@ -498,7 +498,7 @@ Logs confirmed:
 
 - Write path: `remote-rdma-write:volume-grpc`, `data_rdma=true`,
   `real_rdma=true`.
-- Read path: `remote-rdma:local-volume-rust`, `data_rdma=true`,
+- Read path: `remote-rdma:volume-grpc-range`, `data_rdma=true`,
   `real_rdma=true`.
 - Volume engine: successful RDMA GET for write ingest and RDMA PUT for reads,
   with no `direct volume gRPC write failed` fallback.
@@ -521,7 +521,7 @@ It validates:
 - hnode1 write plus hnode2/hnode3 checksum reads on the kernel mount.
 - fio sequential write/read through the RDMA-backed mount.
 - worker and volume logs proving `remote-rdma-write:volume-grpc` and
-  `remote-rdma:local-volume-rust`.
+  `remote-rdma:volume-grpc-range`.
 - `pjdfstest` core POSIX syscall subset.
 - RDMA worker restart failover on hnode2, followed by checksum read.
 
