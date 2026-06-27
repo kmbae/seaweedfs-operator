@@ -79,7 +79,7 @@ rdma:
     port: 18082
     maxConnections: 8
     timeout: 300s
-    enablePayloadRDMA: false
+    enablePayloadRDMA: true
     enableNativeVolumeRDMA: true
     nativeRDMAServiceLevel: 0
     debug: true
