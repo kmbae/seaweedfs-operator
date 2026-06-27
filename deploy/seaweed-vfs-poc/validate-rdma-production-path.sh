@@ -46,6 +46,8 @@ print_kernel_counters() {
       kernel_read_daemon_submit_ns kernel_read_reply_copy_bytes \
       kernel_read_rdma_desc_ops kernel_read_rdma_desc_ns \
       kernel_read_rdma_wr_ns kernel_read_rdma_bounce_copy_bytes \
+      kernel_read_window_cache_hits kernel_read_window_cache_misses \
+      kernel_read_window_cache_bytes \
       kernel_rdma_remote_read_posts kernel_rdma_remote_read_completions \
       kernel_rdma_remote_read_failures kernel_rdma_remote_read_bytes \
       kernel_rdma_read_release_posts kernel_rdma_read_release_completions \
