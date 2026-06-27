@@ -95,9 +95,10 @@ rdma:
   mode: hostPF
   registry: kmbae27
   sidecarTag: rdma-20260627-persist-71d98bc7
-  engineTag: rdma-20260627-volgrpc-read-fc662fd
+  engineTag: rdma-20260627-volgrpc-read-msg-23d6846
   imagePullPolicy: Always
   enablePayloadRDMA: true
+  volumeGrpcMaxMessageBytes: "134217728"
   deviceName: mlx5_1
   ucxTls: rc_verbs,ud_verbs,tcp,self
   ucxNetDevices: ""

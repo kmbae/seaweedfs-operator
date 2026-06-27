@@ -40,6 +40,10 @@ Usage: {{- include "seaweedfs.rdmaVolumeGroup" . | nindent 4 }}
       value: "http://$(POD_IP):8444"
     - name: SEAWEEDFS_RDMA_VOLUME_GRPC_READ
       value: "true"
+    {{- if .Values.rdma.volumeGrpcMaxMessageBytes }}
+    - name: SEAWEEDFS_RDMA_VOLUME_GRPC_MAX_MESSAGE_BYTES
+      value: {{ .Values.rdma.volumeGrpcMaxMessageBytes | quote }}
+    {{- end }}
     - name: VOLUME_DATA_DIR
       value: "/data0"
     - name: VOLUME_IDX_DIR
@@ -191,6 +195,10 @@ sidecars:
         value: "http://$(POD_IP):8444"
       - name: SEAWEEDFS_RDMA_VOLUME_GRPC_READ
         value: "true"
+      {{- if .Values.rdma.volumeGrpcMaxMessageBytes }}
+      - name: SEAWEEDFS_RDMA_VOLUME_GRPC_MAX_MESSAGE_BYTES
+        value: {{ .Values.rdma.volumeGrpcMaxMessageBytes | quote }}
+      {{- end }}
       - name: VOLUME_DATA_DIR
         value: "/data0"
       - name: VOLUME_IDX_DIR
