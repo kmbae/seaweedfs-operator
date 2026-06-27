@@ -28,6 +28,7 @@ RUN_PJDFSTEST="${RUN_PJDFSTEST:-true}"
 RUN_FAILOVER="${RUN_FAILOVER:-true}"
 RUN_METRICS="${RUN_METRICS:-true}"
 ASSERT_KERNEL_READ_COUNTERS="${ASSERT_KERNEL_READ_COUNTERS:-false}"
+RUN_VOLUME_LOG_GATE="${RUN_VOLUME_LOG_GATE:-false}"
 PJDFSTEST_TESTS="${PJDFSTEST_TESTS:-tests/open/25.t tests/unlink/14.t tests/open/26.t tests/mkdir/00.t tests/rename/20.t tests/rename/24.t}"
 
 if command -v kubectl >/dev/null 2>&1; then
@@ -212,6 +213,21 @@ assert_metric_increased() {
   log "OK: ${label} increased (${before} -> ${after})"
 }
 
+assert_metric_unchanged() {
+  local label=$1
+  local before_payload=$2
+  local after_payload=$3
+  local counter=$4
+  local before
+  local after
+  before="$(metric_counter "${before_payload}" "${counter}")"
+  after="$(metric_counter "${after_payload}" "${counter}")"
+  if [ "${after}" -ne "${before}" ]; then
+    die "${label} changed: before=${before} after=${after} counter=${counter}"
+  fi
+  log "OK: ${label} unchanged (${after})"
+}
+
 log "Resolving pods"
 read -r -a reader_nodes <<<"${READER_NODES}"
 writer_client="$(client_pod "${WRITER_NODE}")"
@@ -322,6 +338,12 @@ if [ "${RUN_METRICS}" = "true" ]; then
   assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} handler_write_rdma_commit_ops" "${writer_metrics_before}" "${writer_metrics_after}" handler_write_rdma_commit_ops
   assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} router_read_rdma_success" "${reader_metrics_before}" "${reader_metrics_after}" router_read_rdma_success
   assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} router_read_rdma_bytes" "${reader_metrics_before}" "${reader_metrics_after}" router_read_rdma_bytes
+  assert_metric_unchanged "${VOLUME_POD}/${VOLUME_CONTAINER} network_read_errors" "${volume_metrics_before}" "${volume_metrics_after}" network_read_errors
+  assert_metric_unchanged "${VOLUME_POD}/${VOLUME_CONTAINER} network_write_errors" "${volume_metrics_before}" "${volume_metrics_after}" network_write_errors
+  assert_metric_unchanged "${VOLUME_POD}/${VOLUME_CONTAINER} volume_grpc_read_fallbacks" "${volume_metrics_before}" "${volume_metrics_after}" volume_grpc_read_fallbacks
+  assert_metric_unchanged "${VOLUME_POD}/${VOLUME_CONTAINER} volume_grpc_write_fallbacks" "${volume_metrics_before}" "${volume_metrics_after}" volume_grpc_write_fallbacks
+  assert_metric_unchanged "${VOLUME_POD}/${VOLUME_CONTAINER} rdma_read_payload_put_errors" "${volume_metrics_before}" "${volume_metrics_after}" rdma_read_payload_put_errors
+  assert_metric_unchanged "${VOLUME_POD}/${VOLUME_CONTAINER} rdma_write_payload_get_errors" "${volume_metrics_before}" "${volume_metrics_after}" rdma_write_payload_get_errors
 fi
 
 log "Checking RDMA logs"
@@ -331,12 +353,14 @@ for pod in "${reader_workers[@]}"; do
   assert_log_contains "${logs}" "real_rdma=true" "${pod}"
 done
 
-volume_logs="$(kctl -n "${SEAWEED_NS}" logs "${VOLUME_POD}" -c "${VOLUME_CONTAINER}" --since-time="${since_time}" || true)"
-assert_log_absent "${volume_logs}" "direct volume gRPC write failed" "${VOLUME_POD}/${VOLUME_CONTAINER}"
-assert_log_absent "${volume_logs}" "volume ReadNeedleRange gRPC failed" "${VOLUME_POD}/${VOLUME_CONTAINER}"
-assert_log_absent "${volume_logs}" "local Rust volume read failed" "${VOLUME_POD}/${VOLUME_CONTAINER}"
-assert_log_contains "${volume_logs}" "RDMA GET from peer completed successfully" "${VOLUME_POD}/${VOLUME_CONTAINER}"
-assert_log_contains "${volume_logs}" "RDMA PUT to peer completed successfully" "${VOLUME_POD}/${VOLUME_CONTAINER}"
+if [ "${RUN_VOLUME_LOG_GATE}" = "true" ]; then
+  volume_logs="$(kctl -n "${SEAWEED_NS}" logs "${VOLUME_POD}" -c "${VOLUME_CONTAINER}" --since-time="${since_time}" || true)"
+  assert_log_absent "${volume_logs}" "direct volume gRPC write failed" "${VOLUME_POD}/${VOLUME_CONTAINER}"
+  assert_log_absent "${volume_logs}" "volume ReadNeedleRange gRPC failed" "${VOLUME_POD}/${VOLUME_CONTAINER}"
+  assert_log_absent "${volume_logs}" "local Rust volume read failed" "${VOLUME_POD}/${VOLUME_CONTAINER}"
+  assert_log_contains "${volume_logs}" "RDMA GET from peer completed successfully" "${VOLUME_POD}/${VOLUME_CONTAINER}"
+  assert_log_contains "${volume_logs}" "RDMA PUT to peer completed successfully" "${VOLUME_POD}/${VOLUME_CONTAINER}"
+fi
 
 if [ "${RUN_PJDFSTEST}" = "true" ]; then
   log "Running pjdfstest core gate"
