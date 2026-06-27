@@ -94,24 +94,24 @@ run_read_write_smoke() {
     start=\$(date +%s%N)
     dd if=/dev/zero of='${file}' bs=1M count='${SIZE_MB}' conv=fsync status=none
     end=\$(date +%s%N)
-    bytes=\$(wc -c < '${file}')
+    bytes=\$(stat -c %s '${file}')
     elapsed=\$((end - start))
     printf 'bytes=%s elapsed_ns=%s\n' \"\$bytes\" \"\$elapsed\"
   "
-  sum_src="$(exec_sh "$src" "sha256sum '${file}' | awk '{print \$1}'")"
+  sum_src="$(exec_sh "$src" "dd if=/dev/zero bs=1M count='${SIZE_MB}' status=none | sha256sum | awk '{print \$1}'")"
 
   echo "== large-block read ${SIZE_MB}MiB from ${dst} =="
   exec_sh "$dst" "
     start=\$(date +%s%N)
     dd if='${file}' of=/dev/null bs='${READ_BS_MB}'M status=none
     end=\$(date +%s%N)
-    bytes=\$(wc -c < '${file}')
+    bytes=\$(stat -c %s '${file}')
     elapsed=\$((end - start))
     printf 'bytes=%s elapsed_ns=%s\n' \"\$bytes\" \"\$elapsed\"
   "
 
   echo "== checksum read ${SIZE_MB}MiB from ${dst} =="
-  sum_dst="$(exec_sh "$dst" "sha256sum '${file}' | awk '{print \$1}'")"
+  sum_dst="$(exec_sh "$dst" "dd if='${file}' bs='${READ_BS_MB}'M status=none | sha256sum | awk '{print \$1}'")"
   if [ "$sum_src" != "$sum_dst" ]; then
     echo "ERROR: checksum mismatch: src=${sum_src} dst=${sum_dst}" >&2
     exit 1
