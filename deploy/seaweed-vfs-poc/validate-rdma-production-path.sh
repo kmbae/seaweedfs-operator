@@ -10,6 +10,9 @@ READ_BS_MB="${READ_BS_MB:-1}"
 RUN_FIO="${RUN_FIO:-auto}"
 RUN_PJDFSTEST="${RUN_PJDFSTEST:-auto}"
 RUN_FAILOVER="${RUN_FAILOVER:-false}"
+FAILOVER_NODE="${FAILOVER_NODE:-hnode2}"
+SMOKE_FILE="${SMOKE_FILE:-${MNT}/rdma-production-smoke-${SIZE_MB}m.bin}"
+SMOKE_SHA=""
 
 KUBECTL=("${KUBECTL:-kubectl}")
 if command -v microk8s >/dev/null 2>&1; then
@@ -87,7 +90,7 @@ require_ready() {
 run_read_write_smoke() {
   local src="$1"
   local dst="$2"
-  local file="${MNT}/rdma-production-smoke-${SIZE_MB}m.bin"
+  local file="${SMOKE_FILE}"
   local sum_src
   local sum_dst
 
@@ -112,6 +115,7 @@ run_read_write_smoke() {
     echo "ERROR: checksum mismatch: src=${sum_src} dst=${sum_dst}" >&2
     exit 1
   fi
+  SMOKE_SHA="$sum_src"
   exec_sh "$dst" "wc -c '${file}'"
 }
 
@@ -157,10 +161,39 @@ run_optional_failover() {
     true|1|yes) ;;
     *) return 0 ;;
   esac
+  local node="${1:-$FAILOVER_NODE}"
+  local file="${2:-$SMOKE_FILE}"
+  local expected_sha="${3:-$SMOKE_SHA}"
   local victim
-  victim="$(kctl -n "$NS" get pod -l "$SELECTOR" -o jsonpath='{.items[0].metadata.name}')"
-  echo "== failover: deleting ${victim} and waiting for DaemonSet recovery =="
-  kctl -n "$NS" delete pod "$victim" --wait=false
+  local replacement=""
+  victim="$(pod_for_node "$node")"
+  if [ -z "$victim" ]; then
+    echo "ERROR: no RDMA worker pod found on failover node ${node}" >&2
+    exit 1
+  fi
+  echo "== failover: deleting ${victim} on ${node} and waiting for replacement =="
+  kctl -n "$NS" delete pod "$victim" --wait=true
+  for _ in $(seq 1 90); do
+    replacement="$(pod_for_node "$node" || true)"
+    if [ -n "$replacement" ] && [ "$replacement" != "$victim" ]; then
+      break
+    fi
+    sleep 2
+  done
+  if [ -z "$replacement" ] || [ "$replacement" = "$victim" ]; then
+    echo "ERROR: replacement pod did not appear on ${node}" >&2
+    exit 1
+  fi
+  kctl -n "$NS" wait --for=condition=Ready "pod/${replacement}" --timeout=180s
+  exec_sh "$replacement" "grep -q ' ${MNT} ' /proc/mounts && grep ' ${MNT} ' /proc/mounts"
+  if [ -n "$expected_sha" ]; then
+    local replacement_sha
+    replacement_sha="$(exec_sh "$replacement" "dd if='${file}' bs='${READ_BS_MB}'M status=none | sha256sum | awk '{print \$1}'")"
+    if [ "$replacement_sha" != "$expected_sha" ]; then
+      echo "ERROR: checksum mismatch after failover: expected=${expected_sha} got=${replacement_sha}" >&2
+      exit 1
+    fi
+  fi
   require_ready
 }
 
@@ -183,7 +216,7 @@ main() {
   print_kernel_counters "$dst"
   print_daemon_metrics "$src"
   print_daemon_metrics "$dst"
-  run_optional_failover
+  run_optional_failover "$FAILOVER_NODE" "$SMOKE_FILE" "$SMOKE_SHA"
 }
 
 main "$@"
