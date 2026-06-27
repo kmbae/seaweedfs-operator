@@ -50,6 +50,8 @@ Usage: {{- include "seaweedfs.rdmaVolumeGroup" . | nindent 4 }}
       value: "/data0"
     - name: RDMA_LISTEN_PORT
       value: {{ .Values.rdma.listenPort | quote }}
+    - name: RDMA_ENGINE_METRICS_ADDR
+      value: "0.0.0.0:18085"
     {{- if .Values.rdma.ucxTls }}
     - name: UCX_TLS
       value: {{ .Values.rdma.ucxTls | quote }}
@@ -105,6 +107,8 @@ Usage: {{- include "seaweedfs.rdmaVolumeGroup" . | nindent 4 }}
   ports:
     - name: rdma-net
       containerPort: {{ .Values.rdma.listenPort }}
+    - name: rdma-metrics
+      containerPort: 18085
 - name: rdma-sidecar
   image: {{ printf "%s/rdma-sidecar:%s" .Values.rdma.registry .Values.rdma.sidecarTag }}
   imagePullPolicy: {{ .Values.rdma.imagePullPolicy }}
@@ -205,6 +209,8 @@ sidecars:
         value: "/data0"
       - name: RDMA_LISTEN_PORT
         value: {{ .Values.rdma.listenPort | quote }}
+      - name: RDMA_ENGINE_METRICS_ADDR
+        value: "0.0.0.0:18085"
       {{- if .Values.rdma.ucxTls }}
       - name: UCX_TLS
         value: {{ .Values.rdma.ucxTls | quote }}
@@ -260,6 +266,8 @@ sidecars:
     ports:
       - name: rdma-net
         containerPort: {{ .Values.rdma.listenPort }}
+      - name: rdma-metrics
+        containerPort: 18085
   - name: rdma-sidecar
     image: {{ printf "%s/rdma-sidecar:%s" .Values.rdma.registry .Values.rdma.sidecarTag }}
     imagePullPolicy: {{ .Values.rdma.imagePullPolicy }}

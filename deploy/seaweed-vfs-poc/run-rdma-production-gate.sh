@@ -13,6 +13,9 @@ CLIENT_CONTAINER="${CLIENT_CONTAINER:-shell}"
 WORKER_CONTAINER="${WORKER_CONTAINER:-swvfs-rdma-daemon}"
 VOLUME_POD="${VOLUME_POD:-seaweedfs-volume-r7615-0}"
 VOLUME_CONTAINER="${VOLUME_CONTAINER:-rdma-engine}"
+WORKER_ENGINE_CONTAINER="${WORKER_ENGINE_CONTAINER:-rdma-engine}"
+ENGINE_METRICS_URL="${ENGINE_METRICS_URL:-http://127.0.0.1:18085/metrics}"
+WORKER_CONTROL_METRICS_URL="${WORKER_CONTROL_METRICS_URL:-http://127.0.0.1:18084/metrics}"
 CLIENT_MOUNT="${CLIENT_MOUNT:-/mnt/seaweedvfs}"
 WORKER_MOUNT="${WORKER_MOUNT:-/var/lib/seaweedfs-vfs/mnt}"
 WRITER_NODE="${WRITER_NODE:-hnode1}"
@@ -23,6 +26,7 @@ FIO_SIZE="${FIO_SIZE:-256M}"
 RUN_FIO="${RUN_FIO:-true}"
 RUN_PJDFSTEST="${RUN_PJDFSTEST:-true}"
 RUN_FAILOVER="${RUN_FAILOVER:-true}"
+RUN_METRICS="${RUN_METRICS:-true}"
 PJDFSTEST_TESTS="${PJDFSTEST_TESTS:-tests/open/25.t tests/unlink/14.t tests/open/26.t tests/mkdir/00.t tests/rename/20.t tests/rename/24.t}"
 
 if command -v kubectl >/dev/null 2>&1; then
@@ -69,6 +73,52 @@ exec_worker() {
   local pod=$1
   shift
   kctl -n "${NS}" exec "${pod}" -c "${WORKER_CONTAINER}" -- sh -lc "$*"
+}
+
+fetch_container_metrics() {
+  local namespace=$1
+  local pod=$2
+  local container=$3
+  local url=$4
+  kctl -n "${namespace}" exec "${pod}" -c "${container}" -- sh -lc "curl -fsS '${url}'"
+}
+
+fetch_volume_engine_metrics() {
+  fetch_container_metrics "${SEAWEED_NS}" "${VOLUME_POD}" "${VOLUME_CONTAINER}" "${ENGINE_METRICS_URL}"
+}
+
+fetch_worker_engine_metrics() {
+  local pod=$1
+  fetch_container_metrics "${NS}" "${pod}" "${WORKER_ENGINE_CONTAINER}" "${ENGINE_METRICS_URL}"
+}
+
+fetch_worker_control_metrics() {
+  local pod=$1
+  fetch_container_metrics "${NS}" "${pod}" "${WORKER_CONTAINER}" "${WORKER_CONTROL_METRICS_URL}"
+}
+
+metric_counter() {
+  local payload=$1
+  local name=$2
+  METRICS_PAYLOAD="${payload}" python3 - "${name}" <<'PY'
+import json
+import os
+import sys
+
+name = sys.argv[1]
+try:
+    doc = json.loads(os.environ.get("METRICS_PAYLOAD", "{}"))
+except Exception:
+    print(0)
+    raise SystemExit
+
+for counter in doc.get("counters", []):
+    if counter.get("name") == name:
+        print(int(counter.get("value", 0)))
+        break
+else:
+    print(0)
+PY
 }
 
 wait_for_pod_ready() {
@@ -146,6 +196,21 @@ assert_counter_unchanged() {
   log "OK: ${label} unchanged (${after})"
 }
 
+assert_metric_increased() {
+  local label=$1
+  local before_payload=$2
+  local after_payload=$3
+  local counter=$4
+  local before
+  local after
+  before="$(metric_counter "${before_payload}" "${counter}")"
+  after="$(metric_counter "${after_payload}" "${counter}")"
+  if [ "${after}" -le "${before}" ]; then
+    die "${label} did not increase: before=${before} after=${after} counter=${counter}"
+  fi
+  log "OK: ${label} increased (${before} -> ${after})"
+}
+
 log "Resolving pods"
 read -r -a reader_nodes <<<"${READER_NODES}"
 writer_client="$(client_pod "${WRITER_NODE}")"
@@ -181,6 +246,15 @@ reader_read_desc_before="$(worker_counter "${reader_workers[0]}" kernel_read_rdm
 reader_read_completions_before="$(worker_counter "${reader_workers[0]}" kernel_rdma_remote_read_completions)"
 reader_read_direct_before="$(worker_counter "${reader_workers[0]}" kernel_read_rdma_folio_direct_bytes)"
 reader_read_bounce_before="$(worker_counter "${reader_workers[0]}" kernel_read_rdma_bounce_copy_bytes)"
+
+if [ "${RUN_METRICS}" = "true" ]; then
+  log "Capturing RDMA metrics baseline"
+  volume_metrics_before="$(fetch_volume_engine_metrics)"
+  writer_metrics_before="$(fetch_worker_control_metrics "${writer_worker}")"
+  reader_metrics_before="$(fetch_worker_control_metrics "${reader_workers[0]}")"
+  fetch_worker_engine_metrics "${writer_worker}" >/dev/null
+  fetch_worker_engine_metrics "${reader_workers[0]}" >/dev/null
+fi
 
 log "Smoke write on ${WRITER_NODE}: ${SMOKE_SIZE_MB}MiB"
 writer_sha="$(
@@ -229,6 +303,21 @@ assert_counter_increased "kernel_read_rdma_desc_ops on ${reader_workers[0]}" "${
 assert_counter_increased "kernel_rdma_remote_read_completions on ${reader_workers[0]}" "${reader_read_completions_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_remote_read_completions)"
 assert_counter_increased "kernel_read_rdma_folio_direct_bytes on ${reader_workers[0]}" "${reader_read_direct_before}" "$(worker_counter "${reader_workers[0]}" kernel_read_rdma_folio_direct_bytes)"
 assert_counter_unchanged "kernel_read_rdma_bounce_copy_bytes on ${reader_workers[0]}" "${reader_read_bounce_before}" "$(worker_counter "${reader_workers[0]}" kernel_read_rdma_bounce_copy_bytes)"
+
+if [ "${RUN_METRICS}" = "true" ]; then
+  log "Checking RDMA path metrics"
+  volume_metrics_after="$(fetch_volume_engine_metrics)"
+  writer_metrics_after="$(fetch_worker_control_metrics "${writer_worker}")"
+  reader_metrics_after="$(fetch_worker_control_metrics "${reader_workers[0]}")"
+  assert_metric_increased "${VOLUME_POD}/${VOLUME_CONTAINER} volume_grpc_write_success" "${volume_metrics_before}" "${volume_metrics_after}" volume_grpc_write_success
+  assert_metric_increased "${VOLUME_POD}/${VOLUME_CONTAINER} rdma_write_payload_get_success" "${volume_metrics_before}" "${volume_metrics_after}" rdma_write_payload_get_success
+  assert_metric_increased "${VOLUME_POD}/${VOLUME_CONTAINER} volume_grpc_read_success" "${volume_metrics_before}" "${volume_metrics_after}" volume_grpc_read_success
+  assert_metric_increased "${VOLUME_POD}/${VOLUME_CONTAINER} rdma_read_payload_put_success" "${volume_metrics_before}" "${volume_metrics_after}" rdma_read_payload_put_success
+  assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} handler_write_rdma_prepare_ops" "${writer_metrics_before}" "${writer_metrics_after}" handler_write_rdma_prepare_ops
+  assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} handler_write_rdma_commit_ops" "${writer_metrics_before}" "${writer_metrics_after}" handler_write_rdma_commit_ops
+  assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} handler_read_rdma_desc_ops" "${reader_metrics_before}" "${reader_metrics_after}" handler_read_rdma_desc_ops
+  assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} rdma_read_desc_client_success" "${reader_metrics_before}" "${reader_metrics_after}" rdma_read_desc_client_success
+fi
 
 log "Checking RDMA logs"
 for pod in "${reader_workers[@]}"; do

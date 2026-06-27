@@ -263,9 +263,14 @@ spec:
               value: rc_verbs,ud_verbs,tcp,self
             - name: RDMA_LISTEN_PORT
               value: "38515"
+            - name: RDMA_ENGINE_METRICS_ADDR
+              value: "0.0.0.0:18085"
           ports:
             - name: rdma-engine
               containerPort: 38515
+              protocol: TCP
+            - name: rdma-metrics
+              containerPort: 18085
               protocol: TCP
           resources:
             requests:
