@@ -93,23 +93,17 @@ run_read_write_smoke() {
 
   echo "== write ${SIZE_MB}MiB from ${src} =="
   exec_sh "$src" "
-    start=\$(date +%s%N)
-    dd if=/dev/zero of='${file}' bs=1M count='${SIZE_MB}' conv=fsync status=none
-    end=\$(date +%s%N)
+    { time dd if=/dev/zero of='${file}' bs=1M count='${SIZE_MB}' conv=fsync status=none; } 2>&1
     bytes=\$(stat -c %s '${file}')
-    elapsed=\$((end - start))
-    printf 'bytes=%s elapsed_ns=%s\n' \"\$bytes\" \"\$elapsed\"
+    printf 'bytes=%s\n' \"\$bytes\"
   "
   sum_src="$(exec_sh "$src" "dd if=/dev/zero bs=1M count='${SIZE_MB}' status=none | sha256sum | awk '{print \$1}'")"
 
   echo "== large-block read ${SIZE_MB}MiB from ${dst} =="
   exec_sh "$dst" "
-    start=\$(date +%s%N)
-    dd if='${file}' of=/dev/null bs='${READ_BS_MB}'M status=none
-    end=\$(date +%s%N)
+    { time dd if='${file}' of=/dev/null bs='${READ_BS_MB}'M status=none; } 2>&1
     bytes=\$(stat -c %s '${file}')
-    elapsed=\$((end - start))
-    printf 'bytes=%s elapsed_ns=%s\n' \"\$bytes\" \"\$elapsed\"
+    printf 'bytes=%s\n' \"\$bytes\"
   "
 
   echo "== checksum read ${SIZE_MB}MiB from ${dst} =="
