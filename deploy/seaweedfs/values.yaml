@@ -55,6 +55,7 @@ volume:
   pvcRequest: 105Ti
   metricsPort: 9327
   annotations: {}
+  containerSecurityContext: {}
   sidecars: []
 
 filer:
@@ -99,6 +100,13 @@ rdma:
   imagePullPolicy: Always
   enablePayloadRDMA: true
   enableNativeVolumeRDMA: true
+  sidecars:
+    # Keep existing sidecars on by default. Disable both for embedded-only
+    # volume RDMA canaries once the SeaweedFS image is built with verbs support.
+    engine:
+      enabled: true
+    http:
+      enabled: true
   nativeVolume:
     enabled: true
     # Enables the in-process SeaweedFS volume server RDMA transport. Requires a

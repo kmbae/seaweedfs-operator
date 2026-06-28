@@ -52,6 +52,22 @@ spec:
     {{- if and .Values.rdma.enabled (eq $rdmaMode "hostPF") }}
     hostNetwork: true
     {{- end }}
+    {{- if or .Values.volume.containerSecurityContext (and .Values.rdma.enabled .Values.rdma.nativeVolume.embedded (eq $rdmaMode "hostPF")) }}
+    containerSecurityContext:
+      {{- if .Values.volume.containerSecurityContext }}
+      {{- toYaml .Values.volume.containerSecurityContext | nindent 6 }}
+      {{- else }}
+      privileged: true
+      runAsUser: 0
+      runAsGroup: 0
+      capabilities:
+        add:
+          - IPC_LOCK
+          - NET_ADMIN
+          - SYS_ADMIN
+          - SYS_RESOURCE
+      {{- end }}
+    {{- end }}
     {{- if or .Values.volume.extraArgs (and .Values.rdma.enabled .Values.rdma.nativeVolume.enabled) }}
     extraArgs:
       {{- with .Values.volume.extraArgs }}
@@ -88,8 +104,17 @@ spec:
     volumeMounts:
       - name: rdma-socket
         mountPath: /tmp/rdma
+      {{- if and .Values.rdma.nativeVolume.embedded (eq $rdmaMode "hostPF") }}
+      - name: dev-infiniband
+        mountPath: /dev/infiniband
+      {{- end }}
+    {{- if include "seaweedfs.rdmaAnySidecarEnabled" . }}
     sidecars:
       {{- include "seaweedfs.rdmaSidecarsOnly" . | nindent 6 }}
+    {{- else if .Values.volume.sidecars }}
+    sidecars:
+      {{- toYaml .Values.volume.sidecars | nindent 6 }}
+    {{- end }}
     {{- else if .Values.volume.sidecars }}
     sidecars:
       {{- toYaml .Values.volume.sidecars | nindent 6 }}
@@ -114,6 +139,22 @@ spec:
         kubernetes.io/hostname: {{ $node.node | quote }}
       {{- if and $.Values.rdma.enabled (eq $rdmaMode "hostPF") }}
       hostNetwork: true
+      {{- end }}
+      {{- if or $.Values.volume.containerSecurityContext (and $.Values.rdma.enabled $.Values.rdma.nativeVolume.embedded (eq $rdmaMode "hostPF")) }}
+      containerSecurityContext:
+        {{- if $.Values.volume.containerSecurityContext }}
+        {{- toYaml $.Values.volume.containerSecurityContext | nindent 8 }}
+        {{- else }}
+        privileged: true
+        runAsUser: 0
+        runAsGroup: 0
+        capabilities:
+          add:
+            - IPC_LOCK
+            - NET_ADMIN
+            - SYS_ADMIN
+            - SYS_RESOURCE
+        {{- end }}
       {{- end }}
       {{- if and $.Values.rdma.enabled $.Values.rdma.nativeVolume.enabled }}
       extraArgs:
