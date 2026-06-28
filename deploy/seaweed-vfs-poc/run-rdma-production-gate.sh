@@ -275,11 +275,11 @@ reader_direct_errors_before="$(worker_counter "${reader_workers[0]}" kernel_rdma
 
 if [ "${RUN_METRICS}" = "true" ]; then
   log "Capturing RDMA metrics baseline"
-  volume_metrics_before="$(fetch_volume_engine_metrics)"
   writer_metrics_before="$(fetch_worker_control_metrics "${writer_worker}")"
   reader_metrics_before="$(fetch_worker_control_metrics "${reader_workers[0]}")"
-  fetch_worker_engine_metrics "${writer_worker}" >/dev/null
-  fetch_worker_engine_metrics "${reader_workers[0]}" >/dev/null
+  fetch_volume_engine_metrics >/dev/null || true
+  fetch_worker_engine_metrics "${writer_worker}" >/dev/null || true
+  fetch_worker_engine_metrics "${reader_workers[0]}" >/dev/null || true
 fi
 
 log "Smoke write on ${WRITER_NODE}: ${SMOKE_SIZE_MB}MiB"
@@ -349,30 +349,29 @@ fi
 
 if [ "${RUN_METRICS}" = "true" ]; then
   log "Checking RDMA path metrics"
-  volume_metrics_after="$(fetch_volume_engine_metrics)"
   writer_metrics_after="$(fetch_worker_control_metrics "${writer_worker}")"
   reader_metrics_after="$(fetch_worker_control_metrics "${reader_workers[0]}")"
-  assert_metric_increased "${VOLUME_POD}/${VOLUME_CONTAINER} volume_grpc_write_success" "${volume_metrics_before}" "${volume_metrics_after}" volume_grpc_write_success
-  assert_metric_increased "${VOLUME_POD}/${VOLUME_CONTAINER} rdma_write_payload_get_success" "${volume_metrics_before}" "${volume_metrics_after}" rdma_write_payload_get_success
-  assert_metric_increased "${VOLUME_POD}/${VOLUME_CONTAINER} volume_grpc_read_success" "${volume_metrics_before}" "${volume_metrics_after}" volume_grpc_read_success
-  assert_metric_increased "${VOLUME_POD}/${VOLUME_CONTAINER} rdma_read_payload_put_success" "${volume_metrics_before}" "${volume_metrics_after}" rdma_read_payload_put_success
+  assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write desc" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_desc_success
+  assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write commit" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_success
+  assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write bytes" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_bytes
   assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} handler_write_rdma_prepare_ops" "${writer_metrics_before}" "${writer_metrics_after}" handler_write_rdma_prepare_ops
   assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} handler_write_rdma_commit_ops" "${writer_metrics_before}" "${writer_metrics_after}" handler_write_rdma_commit_ops
+  assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} native volume read desc" "${reader_metrics_before}" "${reader_metrics_after}" volume_native_rdma_read_desc_success
+  assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} native volume read bytes" "${reader_metrics_before}" "${reader_metrics_after}" volume_native_rdma_read_desc_bytes
   assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} router_read_rdma_success" "${reader_metrics_before}" "${reader_metrics_after}" router_read_rdma_success
   assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} router_read_rdma_bytes" "${reader_metrics_before}" "${reader_metrics_after}" router_read_rdma_bytes
-  assert_metric_unchanged "${VOLUME_POD}/${VOLUME_CONTAINER} network_read_errors" "${volume_metrics_before}" "${volume_metrics_after}" network_read_errors
-  assert_metric_unchanged "${VOLUME_POD}/${VOLUME_CONTAINER} network_write_errors" "${volume_metrics_before}" "${volume_metrics_after}" network_write_errors
-  assert_metric_unchanged "${VOLUME_POD}/${VOLUME_CONTAINER} volume_grpc_read_fallbacks" "${volume_metrics_before}" "${volume_metrics_after}" volume_grpc_read_fallbacks
-  assert_metric_unchanged "${VOLUME_POD}/${VOLUME_CONTAINER} volume_grpc_write_fallbacks" "${volume_metrics_before}" "${volume_metrics_after}" volume_grpc_write_fallbacks
-  assert_metric_unchanged "${VOLUME_POD}/${VOLUME_CONTAINER} rdma_read_payload_put_errors" "${volume_metrics_before}" "${volume_metrics_after}" rdma_read_payload_put_errors
-  assert_metric_unchanged "${VOLUME_POD}/${VOLUME_CONTAINER} rdma_write_payload_get_errors" "${volume_metrics_before}" "${volume_metrics_after}" rdma_write_payload_get_errors
+  assert_metric_unchanged "${writer_worker}/${WORKER_CONTAINER} native volume write desc errors" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_desc_post_errors
+  assert_metric_unchanged "${writer_worker}/${WORKER_CONTAINER} native volume write commit errors" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_errors
+  assert_metric_unchanged "${writer_worker}/${WORKER_CONTAINER} native volume write peer errors" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_peer_connect_errors
+  assert_metric_unchanged "${reader_workers[0]}/${WORKER_CONTAINER} native volume read errors" "${reader_metrics_before}" "${reader_metrics_after}" volume_native_rdma_read_desc_errors
+  assert_metric_unchanged "${reader_workers[0]}/${WORKER_CONTAINER} native volume read peer errors" "${reader_metrics_before}" "${reader_metrics_after}" volume_native_rdma_peer_connect_errors
 fi
 
-log "Checking RDMA logs"
-for pod in "${reader_workers[@]}"; do
+log "Checking RDMA daemon logs"
+for pod in "${writer_worker}" "${reader_workers[@]}"; do
   logs="$(kctl -n "${NS}" logs "${pod}" -c "${WORKER_CONTAINER}" --since-time="${since_time}" || true)"
-  assert_log_contains "${logs}" "remote-rdma:volume-grpc-range" "${pod}"
-  assert_log_contains "${logs}" "real_rdma=true" "${pod}"
+  assert_log_absent "${logs}" "native volume RDMA write peer handshake failed" "${pod}"
+  assert_log_absent "${logs}" "native volume RDMA read peer handshake failed" "${pod}"
 done
 
 if [ "${RUN_VOLUME_LOG_GATE}" = "true" ]; then

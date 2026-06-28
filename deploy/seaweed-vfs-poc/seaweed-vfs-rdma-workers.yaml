@@ -60,7 +60,7 @@ spec:
         - operator: Exists
       containers:
         - name: swvfs-rdma-daemon
-          image: kmbae27/rdma-sidecar:swvfs-20260628-380641d73
+          image: kmbae27/rdma-sidecar:swvfs-20260628-1222be5d6
           imagePullPolicy: Always
           securityContext:
             privileged: true
@@ -162,10 +162,11 @@ spec:
                 --enable-read-rdma="${ENABLE_READ_RDMA:-false}" \
                 --enable-write-rdma="${ENABLE_WRITE_RDMA:-false}" \
                 --enable-payload-rdma="${ENABLE_PAYLOAD_RDMA:-false}" \
+                --enable-volume-native-rdma="${ENABLE_VOLUME_NATIVE_RDMA:-true}" \
                 --rdma-read-min-size="${RDMA_READ_MIN_SIZE:-262144}" \
                 --rdma-write-min-size="${RDMA_WRITE_MIN_SIZE:-262144}" \
                 --rdma-control-listen="${RDMA_CONTROL_LISTEN:-:18084}" \
-                --rdma-peer-endpoints="${RDMA_PEER_ENDPOINTS:-http://seaweed-vfs-rdma-peer.seaweed-vfs-poc.svc.cluster.local:18084}" \
+                --rdma-peer-endpoints="${RDMA_PEER_ENDPOINTS-}" \
                 --rdma-peer-min-count="${RDMA_PEER_MIN_COUNT:-3}" \
                 --rdma-peer-connect-interval="${RDMA_PEER_CONNECT_INTERVAL:-5s}" \
                 --rdma-peer-connect-timeout="${RDMA_PEER_CONNECT_TIMEOUT:-5s}" \
@@ -206,6 +207,8 @@ spec:
               value: "true"
             - name: ENABLE_PAYLOAD_RDMA
               value: "true"
+            - name: ENABLE_VOLUME_NATIVE_RDMA
+              value: "true"
             - name: RDMA_READ_MIN_SIZE
               value: "262144"
             - name: RDMA_WRITE_MIN_SIZE
@@ -227,9 +230,9 @@ spec:
             - name: RDMA_CONTROL_LISTEN
               value: :18084
             - name: RDMA_PEER_ENDPOINTS
-              value: http://seaweed-vfs-rdma-peer.seaweed-vfs-poc.svc.cluster.local:18084
+              value: ""
             - name: RDMA_PEER_MIN_COUNT
-              value: "3"
+              value: "0"
             - name: RDMA_PEER_CONNECT_INTERVAL
               value: 5s
             - name: RDMA_PEER_CONNECT_TIMEOUT
@@ -267,7 +270,7 @@ spec:
             - name: rdma-socket
               mountPath: /tmp/rdma
         - name: rdma-engine
-          image: kmbae27/rdma-engine:rdma-20260627-metrics-1f07b31
+          image: kmbae27/rdma-engine:rdma-20260628-1222be5d6
           imagePullPolicy: Always
           command:
             - ./rdma-engine-server
