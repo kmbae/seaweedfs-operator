@@ -443,6 +443,9 @@ reader_read_desc_before="$(worker_counter "${reader_workers[0]}" kernel_read_rdm
 reader_read_completions_before="$(worker_counter "${reader_workers[0]}" kernel_rdma_remote_read_completions)"
 reader_read_direct_before="$(worker_counter "${reader_workers[0]}" kernel_read_rdma_folio_direct_bytes)"
 reader_read_bounce_before="$(worker_counter "${reader_workers[0]}" kernel_read_rdma_bounce_copy_bytes)"
+reader_read_batch_ops_before="$(worker_counter "${reader_workers[0]}" kernel_rdma_read_prepare_batch_ops)"
+reader_read_batch_descs_before="$(worker_counter "${reader_workers[0]}" kernel_rdma_read_prepare_batch_descs)"
+reader_read_batch_fallbacks_before="$(worker_counter "${reader_workers[0]}" kernel_rdma_read_prepare_batch_fallbacks)"
 reader_send_batches_before="$(worker_counter "${reader_workers[0]}" kernel_rdma_send_batches)"
 reader_send_batch_wrs_before="$(worker_counter "${reader_workers[0]}" kernel_rdma_send_batch_wrs)"
 reader_direct_ops_before="$(worker_counter "${reader_workers[0]}" kernel_rdma_direct_read_ops)"
@@ -527,6 +530,9 @@ if [ "${ASSERT_KERNEL_READ_COUNTERS}" = "true" ]; then
   assert_counter_increased "kernel_rdma_remote_read_completions on ${reader_workers[0]}" "${reader_read_completions_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_remote_read_completions)"
   assert_counter_increased "kernel_read_rdma_folio_direct_bytes on ${reader_workers[0]}" "${reader_read_direct_before}" "$(worker_counter "${reader_workers[0]}" kernel_read_rdma_folio_direct_bytes)"
   assert_counter_unchanged "kernel_read_rdma_bounce_copy_bytes on ${reader_workers[0]}" "${reader_read_bounce_before}" "$(worker_counter "${reader_workers[0]}" kernel_read_rdma_bounce_copy_bytes)"
+  assert_counter_increased "kernel_rdma_read_prepare_batch_ops on ${reader_workers[0]}" "${reader_read_batch_ops_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_read_prepare_batch_ops)"
+  assert_counter_increased "kernel_rdma_read_prepare_batch_descs on ${reader_workers[0]}" "${reader_read_batch_descs_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_read_prepare_batch_descs)"
+  assert_counter_unchanged "kernel_rdma_read_prepare_batch_fallbacks on ${reader_workers[0]}" "${reader_read_batch_fallbacks_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_read_prepare_batch_fallbacks)"
   assert_counter_increased "kernel_rdma_send_batches on ${reader_workers[0]}" "${reader_send_batches_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_send_batches)"
   assert_counter_increased "kernel_rdma_send_batch_wrs on ${reader_workers[0]}" "${reader_send_batch_wrs_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_send_batch_wrs)"
   reader_max_batch_wrs="$(worker_counter "${reader_workers[0]}" kernel_rdma_send_max_batch_wrs)"
@@ -557,7 +563,8 @@ if [ "${RUN_METRICS}" = "true" ]; then
   assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} handler_write_rdma_commit_batch_ops" "${writer_metrics_before}" "${writer_metrics_after}" handler_write_rdma_commit_batch_ops
   assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} native volume read desc" "${reader_metrics_before}" "${reader_metrics_after}" volume_native_rdma_read_desc_success
   assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} native volume read bytes" "${reader_metrics_before}" "${reader_metrics_after}" volume_native_rdma_read_desc_bytes
-  assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} handler_read_rdma_prepare_replies" "${reader_metrics_before}" "${reader_metrics_after}" handler_read_rdma_prepare_replies
+  assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} handler_read_rdma_prepare_batch_replies" "${reader_metrics_before}" "${reader_metrics_after}" handler_read_rdma_prepare_batch_replies
+  assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} handler_read_rdma_prepare_batch_descs" "${reader_metrics_before}" "${reader_metrics_after}" handler_read_rdma_prepare_batch_descs
   assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} handler_read_rdma_release_replies" "${reader_metrics_before}" "${reader_metrics_after}" handler_read_rdma_release_replies
   log_metric_average_size "${writer_worker}/${WORKER_CONTAINER} native volume write descriptors" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_desc_success volume_native_rdma_write_desc_bytes
   log_metric_average_size "${reader_workers[0]}/${WORKER_CONTAINER} native volume read descriptors" "${reader_metrics_before}" "${reader_metrics_after}" volume_native_rdma_read_desc_success volume_native_rdma_read_desc_bytes
