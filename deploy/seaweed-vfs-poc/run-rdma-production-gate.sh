@@ -429,6 +429,8 @@ writer_direct_write_fallbacks_before="$(worker_counter "${writer_worker}" kernel
 writer_direct_write_errors_before="$(worker_counter "${writer_worker}" kernel_rdma_direct_write_errors)"
 writer_write_direct_before="$(worker_counter "${writer_worker}" kernel_write_rdma_direct_iter_bytes)"
 writer_write_bounce_before="$(worker_counter "${writer_worker}" kernel_write_rdma_bounce_copy_bytes)"
+writer_send_batches_before="$(worker_counter "${writer_worker}" kernel_rdma_send_batches)"
+writer_send_batch_wrs_before="$(worker_counter "${writer_worker}" kernel_rdma_send_batch_wrs)"
 writer_deferred_queued_before="$(worker_counter "${writer_worker}" kernel_write_rdma_deferred_queued)"
 writer_deferred_flushed_before="$(worker_counter "${writer_worker}" kernel_write_rdma_deferred_flushed)"
 writer_deferred_flushes_before="$(worker_counter "${writer_worker}" kernel_write_rdma_deferred_flushes)"
@@ -440,6 +442,8 @@ reader_read_desc_before="$(worker_counter "${reader_workers[0]}" kernel_read_rdm
 reader_read_completions_before="$(worker_counter "${reader_workers[0]}" kernel_rdma_remote_read_completions)"
 reader_read_direct_before="$(worker_counter "${reader_workers[0]}" kernel_read_rdma_folio_direct_bytes)"
 reader_read_bounce_before="$(worker_counter "${reader_workers[0]}" kernel_read_rdma_bounce_copy_bytes)"
+reader_send_batches_before="$(worker_counter "${reader_workers[0]}" kernel_rdma_send_batches)"
+reader_send_batch_wrs_before="$(worker_counter "${reader_workers[0]}" kernel_rdma_send_batch_wrs)"
 reader_direct_ops_before="$(worker_counter "${reader_workers[0]}" kernel_rdma_direct_read_ops)"
 reader_direct_bytes_before="$(worker_counter "${reader_workers[0]}" kernel_rdma_direct_read_bytes)"
 reader_direct_fallbacks_before="$(worker_counter "${reader_workers[0]}" kernel_rdma_direct_read_fallbacks)"
@@ -501,6 +505,13 @@ assert_counter_unchanged "kernel_rdma_direct_write_fallbacks on ${writer_worker}
 assert_counter_unchanged "kernel_rdma_direct_write_errors on ${writer_worker}" "${writer_direct_write_errors_before}" "$(worker_counter "${writer_worker}" kernel_rdma_direct_write_errors)"
 assert_counter_increased "kernel_write_rdma_direct_iter_bytes on ${writer_worker}" "${writer_write_direct_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_direct_iter_bytes)"
 assert_counter_unchanged "kernel_write_rdma_bounce_copy_bytes on ${writer_worker}" "${writer_write_bounce_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_bounce_copy_bytes)"
+assert_counter_increased "kernel_rdma_send_batches on ${writer_worker}" "${writer_send_batches_before}" "$(worker_counter "${writer_worker}" kernel_rdma_send_batches)"
+assert_counter_increased "kernel_rdma_send_batch_wrs on ${writer_worker}" "${writer_send_batch_wrs_before}" "$(worker_counter "${writer_worker}" kernel_rdma_send_batch_wrs)"
+writer_max_batch_wrs="$(worker_counter "${writer_worker}" kernel_rdma_send_max_batch_wrs)"
+if [ "${writer_max_batch_wrs}" -le 1 ]; then
+  die "kernel_rdma_send_max_batch_wrs on ${writer_worker} did not prove pipelined WR posting: ${writer_max_batch_wrs}"
+fi
+log "OK: kernel_rdma_send_max_batch_wrs on ${writer_worker}=${writer_max_batch_wrs}"
 assert_counter_increased "kernel_write_rdma_deferred_queued on ${writer_worker}" "${writer_deferred_queued_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_deferred_queued)"
 assert_counter_increased "kernel_write_rdma_deferred_flushed on ${writer_worker}" "${writer_deferred_flushed_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_deferred_flushed)"
 assert_counter_increased "kernel_write_rdma_deferred_flushes on ${writer_worker}" "${writer_deferred_flushes_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_deferred_flushes)"
@@ -515,6 +526,13 @@ if [ "${ASSERT_KERNEL_READ_COUNTERS}" = "true" ]; then
   assert_counter_increased "kernel_rdma_remote_read_completions on ${reader_workers[0]}" "${reader_read_completions_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_remote_read_completions)"
   assert_counter_increased "kernel_read_rdma_folio_direct_bytes on ${reader_workers[0]}" "${reader_read_direct_before}" "$(worker_counter "${reader_workers[0]}" kernel_read_rdma_folio_direct_bytes)"
   assert_counter_unchanged "kernel_read_rdma_bounce_copy_bytes on ${reader_workers[0]}" "${reader_read_bounce_before}" "$(worker_counter "${reader_workers[0]}" kernel_read_rdma_bounce_copy_bytes)"
+  assert_counter_increased "kernel_rdma_send_batches on ${reader_workers[0]}" "${reader_send_batches_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_send_batches)"
+  assert_counter_increased "kernel_rdma_send_batch_wrs on ${reader_workers[0]}" "${reader_send_batch_wrs_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_send_batch_wrs)"
+  reader_max_batch_wrs="$(worker_counter "${reader_workers[0]}" kernel_rdma_send_max_batch_wrs)"
+  if [ "${reader_max_batch_wrs}" -le 1 ]; then
+    die "kernel_rdma_send_max_batch_wrs on ${reader_workers[0]} did not prove pipelined WR posting: ${reader_max_batch_wrs}"
+  fi
+  log "OK: kernel_rdma_send_max_batch_wrs on ${reader_workers[0]}=${reader_max_batch_wrs}"
   if [ "${ASSERT_DIRECT_READ_NO_FALLBACK}" = "true" ]; then
     assert_counter_unchanged "kernel_rdma_direct_read_fallbacks on ${reader_workers[0]}" "${reader_direct_fallbacks_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_direct_read_fallbacks)"
     assert_counter_unchanged "kernel_rdma_direct_read_errors on ${reader_workers[0]}" "${reader_direct_errors_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_direct_read_errors)"
