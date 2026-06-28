@@ -32,6 +32,9 @@ done
 "${KUBECTL[@]}" create namespace "${NAMESPACE}" --dry-run=client -o yaml \
   | "${KUBECTL[@]}" apply -f -
 
+"${KUBECTL[@]}" -n "${NAMESPACE}" delete configmap "${CONFIGMAP}" \
+  --ignore-not-found --wait=true
+
 "${KUBECTL[@]}" -n "${NAMESPACE}" create configmap "${CONFIGMAP}" \
   --from-file=Makefile="${KMOD_DIR}/Makefile" \
   --from-file=compat.h="${KMOD_DIR}/compat.h" \
@@ -39,9 +42,7 @@ done
   --from-file=seaweedvfs.c="${KMOD_DIR}/seaweedvfs.c" \
   --from-file=swvfs_proto.h="${KMOD_DIR}/swvfs_proto.h" \
   --from-file=file_lock_core.c="${KMOD_DIR}/compat-probes/file_lock_core.c" \
-  --from-file=inode_state_read.c="${KMOD_DIR}/compat-probes/inode_state_read.c" \
-  --dry-run=client -o yaml \
-  | "${KUBECTL[@]}" apply -f -
+  --from-file=inode_state_read.c="${KMOD_DIR}/compat-probes/inode_state_read.c"
 
 for node in ${NODES}; do
   job="seaweed-vfs-patched-kmod-${node}"
