@@ -208,10 +208,13 @@ microk8s kubectl -n seaweed-vfs-poc wait --for=condition=ready \
 ```
 
 The checked-in DaemonSet now targets the kernel-direct RDMA descriptor path. The
-kernel module loads with `kernel_rdma_direct_reads=1` and
-`kernel_rdma_direct_writes=1`, while legacy `rdma_read_hints` and
-`rdma_write_hints` default to `0` so fallback reads/writes do not silently return
-to the older hinted payload path.
+kernel module loads with `kernel_rdma_direct_reads=1`,
+`kernel_rdma_direct_writes=1`, and `kernel_rdma_async_writeback=1`, while legacy
+`rdma_read_hints` and `rdma_write_hints` default to `0` so fallback reads/writes
+do not silently return to the older hinted payload path. This is the current
+SeaweedFS-over-RDMA direction: kernel pages are queued as dirty RDMA writeback
+payloads, then drained through batched RDMA WRITE descriptors on
+read/flush/fsync/release boundaries.
 
 Apply the DaemonSet as-is and recreate the client pods so they bind the fresh
 host mount:
