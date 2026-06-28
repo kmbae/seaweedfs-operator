@@ -24,6 +24,8 @@ FAILOVER_NODE="${FAILOVER_NODE:-hnode2}"
 SMOKE_SIZE_MB="${SMOKE_SIZE_MB:-64}"
 FIO_SIZE="${FIO_SIZE:-256M}"
 RUN_FIO="${RUN_FIO:-true}"
+RUN_WRITE_BATCH_PROBE="${RUN_WRITE_BATCH_PROBE:-true}"
+WRITE_BATCH_PROBE_SIZE="${WRITE_BATCH_PROBE_SIZE:-64M}"
 RUN_PJDFSTEST="${RUN_PJDFSTEST:-true}"
 RUN_FAILOVER="${RUN_FAILOVER:-true}"
 RUN_METRICS="${RUN_METRICS:-true}"
@@ -421,6 +423,7 @@ fi
 since_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 test_dir="${CLIENT_MOUNT}/rdma-prod-gate-$(date +%Y%m%d-%H%M%S)"
 smoke_file="${test_dir}/payload.bin"
+write_batch_file="${test_dir}/write-batch.bin"
 fio_file="${test_dir}/fio.bin"
 writer_write_ops_before="$(worker_counter "${writer_worker}" kernel_write_rdma_ops)"
 writer_write_completions_before="$(worker_counter "${writer_worker}" kernel_rdma_remote_write_completions)"
@@ -439,6 +442,9 @@ writer_deferred_errors_before="$(worker_counter "${writer_worker}" kernel_write_
 writer_commit_batch_ops_before="$(worker_counter "${writer_worker}" kernel_write_rdma_commit_batch_ops)"
 writer_commit_batch_entries_before="$(worker_counter "${writer_worker}" kernel_write_rdma_commit_batch_entries)"
 writer_commit_batch_errors_before="$(worker_counter "${writer_worker}" kernel_write_rdma_commit_batch_errors)"
+writer_write_prepare_batch_ops_before="$(worker_counter "${writer_worker}" kernel_rdma_write_prepare_batch_ops)"
+writer_write_prepare_batch_descs_before="$(worker_counter "${writer_worker}" kernel_rdma_write_prepare_batch_descs)"
+writer_write_prepare_batch_fallbacks_before="$(worker_counter "${writer_worker}" kernel_rdma_write_prepare_batch_fallbacks)"
 reader_read_desc_before="$(worker_counter "${reader_workers[0]}" kernel_read_rdma_desc_ops)"
 reader_read_completions_before="$(worker_counter "${reader_workers[0]}" kernel_rdma_remote_read_completions)"
 reader_read_direct_before="$(worker_counter "${reader_workers[0]}" kernel_read_rdma_folio_direct_bytes)"
@@ -483,6 +489,15 @@ for i in "${!reader_clients[@]}"; do
   [ "${reader_sha}" = "${writer_sha}" ] || die "checksum mismatch on ${node}: ${reader_sha} != ${writer_sha}"
 done
 
+if [ "${RUN_WRITE_BATCH_PROBE}" = "true" ]; then
+  log "Write batch probe on ${WRITER_NODE}: ${WRITE_BATCH_PROBE_SIZE}"
+  exec_client "${writer_client}" "
+    set -euo pipefail
+    dd if=/dev/zero of='${write_batch_file}' bs='${WRITE_BATCH_PROBE_SIZE}' count=1 status=none
+    sync '${write_batch_file}'
+  "
+fi
+
 if [ "${RUN_FIO}" = "true" ]; then
   log "Running fio (${FIO_SIZE})"
   ensure_fio "${writer_client}"
@@ -523,6 +538,11 @@ assert_counter_unchanged "kernel_write_rdma_deferred_errors on ${writer_worker}"
 assert_counter_increased "kernel_write_rdma_commit_batch_ops on ${writer_worker}" "${writer_commit_batch_ops_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_commit_batch_ops)"
 assert_counter_increased "kernel_write_rdma_commit_batch_entries on ${writer_worker}" "${writer_commit_batch_entries_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_commit_batch_entries)"
 assert_counter_unchanged "kernel_write_rdma_commit_batch_errors on ${writer_worker}" "${writer_commit_batch_errors_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_commit_batch_errors)"
+if [ "${RUN_WRITE_BATCH_PROBE}" = "true" ]; then
+  assert_counter_increased "kernel_rdma_write_prepare_batch_ops on ${writer_worker}" "${writer_write_prepare_batch_ops_before}" "$(worker_counter "${writer_worker}" kernel_rdma_write_prepare_batch_ops)"
+  assert_counter_increased "kernel_rdma_write_prepare_batch_descs on ${writer_worker}" "${writer_write_prepare_batch_descs_before}" "$(worker_counter "${writer_worker}" kernel_rdma_write_prepare_batch_descs)"
+  assert_counter_unchanged "kernel_rdma_write_prepare_batch_fallbacks on ${writer_worker}" "${writer_write_prepare_batch_fallbacks_before}" "$(worker_counter "${writer_worker}" kernel_rdma_write_prepare_batch_fallbacks)"
+fi
 if [ "${ASSERT_KERNEL_READ_COUNTERS}" = "true" ]; then
   assert_counter_increased "kernel_rdma_direct_read_ops on ${reader_workers[0]}" "${reader_direct_ops_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_direct_read_ops)"
   assert_counter_increased "kernel_rdma_direct_read_bytes on ${reader_workers[0]}" "${reader_direct_bytes_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_direct_read_bytes)"
@@ -561,6 +581,13 @@ if [ "${RUN_METRICS}" = "true" ]; then
   assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write bytes" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_batch_bytes
   assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} handler_write_rdma_prepare_ops" "${writer_metrics_before}" "${writer_metrics_after}" handler_write_rdma_prepare_ops
   assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} handler_write_rdma_commit_batch_ops" "${writer_metrics_before}" "${writer_metrics_after}" handler_write_rdma_commit_batch_ops
+  if [ "${RUN_WRITE_BATCH_PROBE}" = "true" ]; then
+    assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write desc batch" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_desc_batch_success
+    assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write desc batch entries" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_desc_batch_entries
+    assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} handler_write_rdma_prepare_batch_ops" "${writer_metrics_before}" "${writer_metrics_after}" handler_write_rdma_prepare_batch_ops
+    assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} handler_write_rdma_prepare_batch_replies" "${writer_metrics_before}" "${writer_metrics_after}" handler_write_rdma_prepare_batch_replies
+    assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} handler_write_rdma_prepare_batch_descs" "${writer_metrics_before}" "${writer_metrics_after}" handler_write_rdma_prepare_batch_descs
+  fi
   assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} native volume read desc" "${reader_metrics_before}" "${reader_metrics_after}" volume_native_rdma_read_desc_success
   assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} native volume read bytes" "${reader_metrics_before}" "${reader_metrics_after}" volume_native_rdma_read_desc_bytes
   assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} handler_read_rdma_prepare_batch_replies" "${reader_metrics_before}" "${reader_metrics_after}" handler_read_rdma_prepare_batch_replies
