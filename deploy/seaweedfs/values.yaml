@@ -1,6 +1,6 @@
 # Seaweed CR name (defaults to Helm release name)
 name: ""
-image: kmbae27/seaweedfs:rdma-20260628-28ca175ef
+image: kmbae27/seaweedfs:rdma-20260628-9815f8cea
 volumeServerDiskCount: 1
 hostSuffix: ""
 labels: {}
@@ -94,7 +94,7 @@ rdma:
   # hostPF: use the node's host RDMA PF for lab validation while VF LID/UFM is unresolved.
   mode: hostPF
   registry: kmbae27
-  sidecarTag: rdma-20260628-100246c54
+  sidecarTag: rdma-20260628-9815f8cea
   engineTag: rdma-20260628-28ca175ef
   imagePullPolicy: Always
   enablePayloadRDMA: true
