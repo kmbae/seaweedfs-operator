@@ -48,6 +48,12 @@ fi
 kctl() { "${KUBECTL[@]}" "$@"; }
 log() { printf '[%s] %s\n' "$(date +%H:%M:%S)" "$*"; }
 die() { echo "ERROR: $*" >&2; exit 1; }
+is_truthy() {
+  case "${1:-}" in
+    Y|y|1|true|TRUE|yes|YES) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
 pod_by_node() {
   local label=$1
@@ -451,6 +457,15 @@ writer_commit_batch_errors_before="$(worker_counter "${writer_worker}" kernel_wr
 writer_write_prepare_batch_ops_before="$(worker_counter "${writer_worker}" kernel_rdma_write_prepare_batch_ops)"
 writer_write_prepare_batch_descs_before="$(worker_counter "${writer_worker}" kernel_rdma_write_prepare_batch_descs)"
 writer_write_prepare_batch_fallbacks_before="$(worker_counter "${writer_worker}" kernel_rdma_write_prepare_batch_fallbacks)"
+writer_pagecache_writeback="$(worker_counter "${writer_worker}" kernel_rdma_pagecache_writeback)"
+writer_pagecache_write_ops_before="$(worker_counter "${writer_worker}" kernel_write_rdma_pagecache_write_ops)"
+writer_pagecache_write_bytes_before="$(worker_counter "${writer_worker}" kernel_write_rdma_pagecache_write_bytes)"
+writer_pagecache_dirty_folios_before="$(worker_counter "${writer_worker}" kernel_write_rdma_pagecache_dirty_folios)"
+writer_pagecache_writepages_ops_before="$(worker_counter "${writer_worker}" kernel_write_rdma_pagecache_writepages_ops)"
+writer_pagecache_writeback_ops_before="$(worker_counter "${writer_worker}" kernel_write_rdma_pagecache_writeback_ops)"
+writer_pagecache_writeback_bytes_before="$(worker_counter "${writer_worker}" kernel_write_rdma_pagecache_writeback_bytes)"
+writer_pagecache_writeback_fallbacks_before="$(worker_counter "${writer_worker}" kernel_write_rdma_pagecache_writeback_fallbacks)"
+writer_pagecache_writeback_errors_before="$(worker_counter "${writer_worker}" kernel_write_rdma_pagecache_writeback_errors)"
 reader_read_desc_before="$(worker_counter "${reader_workers[0]}" kernel_read_rdma_desc_ops)"
 reader_read_completions_before="$(worker_counter "${reader_workers[0]}" kernel_rdma_remote_read_completions)"
 reader_read_direct_before="$(worker_counter "${reader_workers[0]}" kernel_read_rdma_folio_direct_bytes)"
@@ -528,8 +543,6 @@ assert_counter_increased "kernel_rdma_direct_write_ops on ${writer_worker}" "${w
 assert_counter_increased "kernel_rdma_direct_write_bytes on ${writer_worker}" "${writer_direct_write_bytes_before}" "$(worker_counter "${writer_worker}" kernel_rdma_direct_write_bytes)"
 assert_counter_unchanged "kernel_rdma_direct_write_fallbacks on ${writer_worker}" "${writer_direct_write_fallbacks_before}" "$(worker_counter "${writer_worker}" kernel_rdma_direct_write_fallbacks)"
 assert_counter_unchanged "kernel_rdma_direct_write_errors on ${writer_worker}" "${writer_direct_write_errors_before}" "$(worker_counter "${writer_worker}" kernel_rdma_direct_write_errors)"
-assert_counter_increased "kernel_write_rdma_direct_iter_bytes on ${writer_worker}" "${writer_write_direct_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_direct_iter_bytes)"
-assert_counter_unchanged "kernel_write_rdma_bounce_copy_bytes on ${writer_worker}" "${writer_write_bounce_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_bounce_copy_bytes)"
 assert_counter_increased "kernel_rdma_send_batches on ${writer_worker}" "${writer_send_batches_before}" "$(worker_counter "${writer_worker}" kernel_rdma_send_batches)"
 assert_counter_increased "kernel_rdma_send_batch_wrs on ${writer_worker}" "${writer_send_batch_wrs_before}" "$(worker_counter "${writer_worker}" kernel_rdma_send_batch_wrs)"
 writer_max_batch_wrs="$(worker_counter "${writer_worker}" kernel_rdma_send_max_batch_wrs)"
@@ -537,23 +550,42 @@ if [ "${ASSERT_KERNEL_RDMA_PIPELINED_WRS}" = "true" ] && [ "${writer_max_batch_w
   die "kernel_rdma_send_max_batch_wrs on ${writer_worker} did not prove pipelined WR posting: ${writer_max_batch_wrs}"
 fi
 log "kernel_rdma_send_max_batch_wrs on ${writer_worker}=${writer_max_batch_wrs}"
-assert_counter_increased "kernel_write_rdma_deferred_queued on ${writer_worker}" "${writer_deferred_queued_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_deferred_queued)"
-assert_counter_increased "kernel_write_rdma_deferred_flushed on ${writer_worker}" "${writer_deferred_flushed_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_deferred_flushed)"
-assert_counter_increased "kernel_write_rdma_deferred_flushes on ${writer_worker}" "${writer_deferred_flushes_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_deferred_flushes)"
-assert_counter_unchanged "kernel_write_rdma_deferred_errors on ${writer_worker}" "${writer_deferred_errors_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_deferred_errors)"
-assert_counter_increased "kernel_write_rdma_async_queued on ${writer_worker}" "${writer_async_queued_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_async_queued)"
-assert_counter_increased "kernel_write_rdma_async_flushed on ${writer_worker}" "${writer_async_flushed_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_async_flushed)"
-assert_counter_increased "kernel_write_rdma_async_flushes on ${writer_worker}" "${writer_async_flushes_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_async_flushes)"
-assert_counter_increased "kernel_write_rdma_async_bytes on ${writer_worker}" "${writer_async_bytes_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_async_bytes)"
-assert_counter_unchanged "kernel_write_rdma_async_errors on ${writer_worker}" "${writer_async_errors_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_async_errors)"
-log "kernel_write_rdma_async_backpressure on ${writer_worker}: ${writer_async_backpressure_before} -> $(worker_counter "${writer_worker}" kernel_write_rdma_async_backpressure)"
-assert_counter_increased "kernel_write_rdma_commit_batch_ops on ${writer_worker}" "${writer_commit_batch_ops_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_commit_batch_ops)"
-assert_counter_increased "kernel_write_rdma_commit_batch_entries on ${writer_worker}" "${writer_commit_batch_entries_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_commit_batch_entries)"
-assert_counter_unchanged "kernel_write_rdma_commit_batch_errors on ${writer_worker}" "${writer_commit_batch_errors_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_commit_batch_errors)"
-if [ "${RUN_WRITE_BATCH_PROBE}" = "true" ]; then
-  assert_counter_increased "kernel_rdma_write_prepare_batch_ops on ${writer_worker}" "${writer_write_prepare_batch_ops_before}" "$(worker_counter "${writer_worker}" kernel_rdma_write_prepare_batch_ops)"
-  assert_counter_increased "kernel_rdma_write_prepare_batch_descs on ${writer_worker}" "${writer_write_prepare_batch_descs_before}" "$(worker_counter "${writer_worker}" kernel_rdma_write_prepare_batch_descs)"
-  assert_counter_unchanged "kernel_rdma_write_prepare_batch_fallbacks on ${writer_worker}" "${writer_write_prepare_batch_fallbacks_before}" "$(worker_counter "${writer_worker}" kernel_rdma_write_prepare_batch_fallbacks)"
+assert_counter_unchanged "kernel_write_rdma_bounce_copy_bytes on ${writer_worker}" "${writer_write_bounce_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_bounce_copy_bytes)"
+if is_truthy "${writer_pagecache_writeback}"; then
+  log "Checking page-cache RDMA writeback counters on ${writer_worker}"
+  assert_counter_increased "kernel_write_rdma_pagecache_write_ops on ${writer_worker}" "${writer_pagecache_write_ops_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_pagecache_write_ops)"
+  assert_counter_increased "kernel_write_rdma_pagecache_write_bytes on ${writer_worker}" "${writer_pagecache_write_bytes_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_pagecache_write_bytes)"
+  assert_counter_increased "kernel_write_rdma_pagecache_dirty_folios on ${writer_worker}" "${writer_pagecache_dirty_folios_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_pagecache_dirty_folios)"
+  assert_counter_increased "kernel_write_rdma_pagecache_writepages_ops on ${writer_worker}" "${writer_pagecache_writepages_ops_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_pagecache_writepages_ops)"
+  assert_counter_increased "kernel_write_rdma_pagecache_writeback_ops on ${writer_worker}" "${writer_pagecache_writeback_ops_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_pagecache_writeback_ops)"
+  assert_counter_increased "kernel_write_rdma_pagecache_writeback_bytes on ${writer_worker}" "${writer_pagecache_writeback_bytes_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_pagecache_writeback_bytes)"
+  assert_counter_unchanged "kernel_write_rdma_pagecache_writeback_fallbacks on ${writer_worker}" "${writer_pagecache_writeback_fallbacks_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_pagecache_writeback_fallbacks)"
+  assert_counter_unchanged "kernel_write_rdma_pagecache_writeback_errors on ${writer_worker}" "${writer_pagecache_writeback_errors_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_pagecache_writeback_errors)"
+  assert_counter_unchanged "kernel_write_rdma_direct_iter_bytes on ${writer_worker}" "${writer_write_direct_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_direct_iter_bytes)"
+  assert_counter_unchanged "kernel_write_rdma_deferred_errors on ${writer_worker}" "${writer_deferred_errors_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_deferred_errors)"
+  assert_counter_unchanged "kernel_write_rdma_async_errors on ${writer_worker}" "${writer_async_errors_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_async_errors)"
+  assert_counter_unchanged "kernel_write_rdma_commit_batch_errors on ${writer_worker}" "${writer_commit_batch_errors_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_commit_batch_errors)"
+  log "page-cache mode uses writepages RDMA batches; legacy async queue counters are informational"
+else
+  assert_counter_increased "kernel_write_rdma_direct_iter_bytes on ${writer_worker}" "${writer_write_direct_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_direct_iter_bytes)"
+  assert_counter_increased "kernel_write_rdma_deferred_queued on ${writer_worker}" "${writer_deferred_queued_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_deferred_queued)"
+  assert_counter_increased "kernel_write_rdma_deferred_flushed on ${writer_worker}" "${writer_deferred_flushed_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_deferred_flushed)"
+  assert_counter_increased "kernel_write_rdma_deferred_flushes on ${writer_worker}" "${writer_deferred_flushes_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_deferred_flushes)"
+  assert_counter_unchanged "kernel_write_rdma_deferred_errors on ${writer_worker}" "${writer_deferred_errors_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_deferred_errors)"
+  assert_counter_increased "kernel_write_rdma_async_queued on ${writer_worker}" "${writer_async_queued_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_async_queued)"
+  assert_counter_increased "kernel_write_rdma_async_flushed on ${writer_worker}" "${writer_async_flushed_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_async_flushed)"
+  assert_counter_increased "kernel_write_rdma_async_flushes on ${writer_worker}" "${writer_async_flushes_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_async_flushes)"
+  assert_counter_increased "kernel_write_rdma_async_bytes on ${writer_worker}" "${writer_async_bytes_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_async_bytes)"
+  assert_counter_unchanged "kernel_write_rdma_async_errors on ${writer_worker}" "${writer_async_errors_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_async_errors)"
+  log "kernel_write_rdma_async_backpressure on ${writer_worker}: ${writer_async_backpressure_before} -> $(worker_counter "${writer_worker}" kernel_write_rdma_async_backpressure)"
+  assert_counter_increased "kernel_write_rdma_commit_batch_ops on ${writer_worker}" "${writer_commit_batch_ops_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_commit_batch_ops)"
+  assert_counter_increased "kernel_write_rdma_commit_batch_entries on ${writer_worker}" "${writer_commit_batch_entries_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_commit_batch_entries)"
+  assert_counter_unchanged "kernel_write_rdma_commit_batch_errors on ${writer_worker}" "${writer_commit_batch_errors_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_commit_batch_errors)"
+  if [ "${RUN_WRITE_BATCH_PROBE}" = "true" ]; then
+    assert_counter_increased "kernel_rdma_write_prepare_batch_ops on ${writer_worker}" "${writer_write_prepare_batch_ops_before}" "$(worker_counter "${writer_worker}" kernel_rdma_write_prepare_batch_ops)"
+    assert_counter_increased "kernel_rdma_write_prepare_batch_descs on ${writer_worker}" "${writer_write_prepare_batch_descs_before}" "$(worker_counter "${writer_worker}" kernel_rdma_write_prepare_batch_descs)"
+    assert_counter_unchanged "kernel_rdma_write_prepare_batch_fallbacks on ${writer_worker}" "${writer_write_prepare_batch_fallbacks_before}" "$(worker_counter "${writer_worker}" kernel_rdma_write_prepare_batch_fallbacks)"
+  fi
 fi
 if [ "${ASSERT_KERNEL_READ_COUNTERS}" = "true" ]; then
   assert_counter_increased "kernel_rdma_direct_read_ops on ${reader_workers[0]}" "${reader_direct_ops_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_direct_read_ops)"
@@ -588,11 +620,17 @@ if [ "${RUN_METRICS}" = "true" ]; then
   writer_metrics_after="$(fetch_worker_control_metrics "${writer_worker}")"
   reader_metrics_after="$(fetch_worker_control_metrics "${reader_workers[0]}")"
   assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write desc" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_desc_success
-  assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write commit batch" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_batch_success
-  assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write commit batch entries" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_batch_entry_success
-  assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write bytes" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_batch_bytes
-  assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} handler_write_rdma_commit_batch_ops" "${writer_metrics_before}" "${writer_metrics_after}" handler_write_rdma_commit_batch_ops
-  if [ "${RUN_WRITE_BATCH_PROBE}" = "true" ]; then
+  if is_truthy "${writer_pagecache_writeback}"; then
+    assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write commit" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_success
+    assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write bytes" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_bytes
+    assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} handler_write_rdma_commit_requests" "${writer_metrics_before}" "${writer_metrics_after}" handler_write_rdma_commit_requests
+  else
+    assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write commit batch" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_batch_success
+    assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write commit batch entries" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_batch_entry_success
+    assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write bytes" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_batch_bytes
+    assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} handler_write_rdma_commit_batch_ops" "${writer_metrics_before}" "${writer_metrics_after}" handler_write_rdma_commit_batch_ops
+  fi
+  if [ "${RUN_WRITE_BATCH_PROBE}" = "true" ] && ! is_truthy "${writer_pagecache_writeback}"; then
     assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write desc batch" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_desc_batch_success
     assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write desc batch entries" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_desc_batch_entries
     assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} handler_write_rdma_prepare_batch_ops" "${writer_metrics_before}" "${writer_metrics_after}" handler_write_rdma_prepare_batch_ops

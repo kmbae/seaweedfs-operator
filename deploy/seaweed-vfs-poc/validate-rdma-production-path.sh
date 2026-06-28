@@ -20,6 +20,12 @@ if command -v microk8s >/dev/null 2>&1; then
 fi
 
 kctl() { "${KUBECTL[@]}" "$@"; }
+is_truthy() {
+  case "${1:-}" in
+    Y|y|1|true|TRUE|yes|YES) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
 pod_for_node() {
   local node="$1"
@@ -80,6 +86,15 @@ print_kernel_counters() {
       kernel_write_rdma_async_queued kernel_write_rdma_async_flushed \
       kernel_write_rdma_async_flushes kernel_write_rdma_async_errors \
       kernel_write_rdma_async_bytes kernel_write_rdma_async_backpressure \
+      kernel_rdma_pagecache_writeback \
+      kernel_write_rdma_pagecache_write_ops \
+      kernel_write_rdma_pagecache_write_bytes \
+      kernel_write_rdma_pagecache_dirty_folios \
+      kernel_write_rdma_pagecache_writepages_ops \
+      kernel_write_rdma_pagecache_writeback_ops \
+      kernel_write_rdma_pagecache_writeback_bytes \
+      kernel_write_rdma_pagecache_writeback_fallbacks \
+      kernel_write_rdma_pagecache_writeback_errors \
       kernel_rdma_remote_write_posts \
       kernel_rdma_remote_write_completions kernel_rdma_remote_write_failures \
       kernel_rdma_remote_write_bytes; do
@@ -269,6 +284,12 @@ main() {
   local src_direct_write_ops_before src_direct_write_bytes_before
   local src_direct_write_fallbacks_before src_direct_write_errors_before
   local src_write_direct_before src_write_bounce_before
+  local src_pagecache_writeback
+  local src_pagecache_write_ops_before src_pagecache_write_bytes_before
+  local src_pagecache_dirty_folios_before
+  local src_pagecache_writepages_ops_before
+  local src_pagecache_writeback_ops_before src_pagecache_writeback_bytes_before
+  local src_pagecache_writeback_errors_before
   local dst_read_desc_before dst_read_completions_before
   local dst_read_direct_before dst_read_bounce_before
   src_write_ops_before="$(counter_value "$src" kernel_write_rdma_ops)"
@@ -279,6 +300,14 @@ main() {
   src_direct_write_errors_before="$(counter_value "$src" kernel_rdma_direct_write_errors)"
   src_write_direct_before="$(counter_value "$src" kernel_write_rdma_direct_iter_bytes)"
   src_write_bounce_before="$(counter_value "$src" kernel_write_rdma_bounce_copy_bytes)"
+  src_pagecache_writeback="$(counter_value "$src" kernel_rdma_pagecache_writeback)"
+  src_pagecache_write_ops_before="$(counter_value "$src" kernel_write_rdma_pagecache_write_ops)"
+  src_pagecache_write_bytes_before="$(counter_value "$src" kernel_write_rdma_pagecache_write_bytes)"
+  src_pagecache_dirty_folios_before="$(counter_value "$src" kernel_write_rdma_pagecache_dirty_folios)"
+  src_pagecache_writepages_ops_before="$(counter_value "$src" kernel_write_rdma_pagecache_writepages_ops)"
+  src_pagecache_writeback_ops_before="$(counter_value "$src" kernel_write_rdma_pagecache_writeback_ops)"
+  src_pagecache_writeback_bytes_before="$(counter_value "$src" kernel_write_rdma_pagecache_writeback_bytes)"
+  src_pagecache_writeback_errors_before="$(counter_value "$src" kernel_write_rdma_pagecache_writeback_errors)"
   dst_read_desc_before="$(counter_value "$dst" kernel_read_rdma_desc_ops)"
   dst_read_completions_before="$(counter_value "$dst" kernel_rdma_remote_read_completions)"
   dst_read_direct_before="$(counter_value "$dst" kernel_read_rdma_folio_direct_bytes)"
@@ -292,7 +321,19 @@ main() {
   assert_counter_increased "kernel_rdma_direct_write_bytes on writer" "$src_direct_write_bytes_before" "$(counter_value "$src" kernel_rdma_direct_write_bytes)"
   assert_counter_unchanged "kernel_rdma_direct_write_fallbacks on writer" "$src_direct_write_fallbacks_before" "$(counter_value "$src" kernel_rdma_direct_write_fallbacks)"
   assert_counter_unchanged "kernel_rdma_direct_write_errors on writer" "$src_direct_write_errors_before" "$(counter_value "$src" kernel_rdma_direct_write_errors)"
-  assert_counter_increased "kernel_write_rdma_direct_iter_bytes on writer" "$src_write_direct_before" "$(counter_value "$src" kernel_write_rdma_direct_iter_bytes)"
+  if is_truthy "$src_pagecache_writeback"; then
+    assert_counter_increased "kernel_write_rdma_pagecache_write_ops on writer" "$src_pagecache_write_ops_before" "$(counter_value "$src" kernel_write_rdma_pagecache_write_ops)"
+    assert_counter_increased "kernel_write_rdma_pagecache_write_bytes on writer" "$src_pagecache_write_bytes_before" "$(counter_value "$src" kernel_write_rdma_pagecache_write_bytes)"
+    assert_counter_increased "kernel_write_rdma_pagecache_dirty_folios on writer" "$src_pagecache_dirty_folios_before" "$(counter_value "$src" kernel_write_rdma_pagecache_dirty_folios)"
+    assert_counter_increased "kernel_write_rdma_pagecache_writepages_ops on writer" "$src_pagecache_writepages_ops_before" "$(counter_value "$src" kernel_write_rdma_pagecache_writepages_ops)"
+    assert_counter_increased "kernel_write_rdma_pagecache_writeback_ops on writer" "$src_pagecache_writeback_ops_before" "$(counter_value "$src" kernel_write_rdma_pagecache_writeback_ops)"
+    assert_counter_increased "kernel_write_rdma_pagecache_writeback_bytes on writer" "$src_pagecache_writeback_bytes_before" "$(counter_value "$src" kernel_write_rdma_pagecache_writeback_bytes)"
+    assert_counter_unchanged "kernel_write_rdma_pagecache_writeback_errors on writer" "$src_pagecache_writeback_errors_before" "$(counter_value "$src" kernel_write_rdma_pagecache_writeback_errors)"
+    assert_counter_unchanged "kernel_write_rdma_direct_iter_bytes on writer" "$src_write_direct_before" "$(counter_value "$src" kernel_write_rdma_direct_iter_bytes)"
+    echo "INFO: kernel_write_rdma_pagecache_writeback_fallbacks on writer: $(counter_value "$src" kernel_write_rdma_pagecache_writeback_fallbacks)"
+  else
+    assert_counter_increased "kernel_write_rdma_direct_iter_bytes on writer" "$src_write_direct_before" "$(counter_value "$src" kernel_write_rdma_direct_iter_bytes)"
+  fi
   assert_counter_unchanged "kernel_write_rdma_bounce_copy_bytes on writer" "$src_write_bounce_before" "$(counter_value "$src" kernel_write_rdma_bounce_copy_bytes)"
   assert_counter_increased "kernel_read_rdma_desc_ops on reader" "$dst_read_desc_before" "$(counter_value "$dst" kernel_read_rdma_desc_ops)"
   assert_counter_increased "kernel_rdma_remote_read_completions on reader" "$dst_read_completions_before" "$(counter_value "$dst" kernel_rdma_remote_read_completions)"
