@@ -102,7 +102,7 @@ spec:
               fi
               if lsmod | grep -q '^seaweedvfs '; then
                 fresh_module=true
-                for param in rdma_read_window_ios kernel_rdma_direct_reads kernel_rdma_direct_read_min_bytes kernel_rdma_direct_read_ops kernel_rdma_direct_read_bytes kernel_rdma_direct_read_fallbacks kernel_rdma_direct_read_errors kernel_rdma_direct_writes kernel_rdma_direct_write_min_bytes kernel_rdma_direct_write_ops kernel_rdma_direct_write_bytes kernel_rdma_direct_write_fallbacks kernel_rdma_direct_write_errors kernel_read_rdma_folio_direct_ops kernel_read_rdma_folio_direct_bytes kernel_write_rdma_direct_iter_bytes kernel_write_rdma_bounce_copy_bytes; do
+                for param in rdma_read_window_ios kernel_rdma_connection_slots kernel_rdma_connection_slot_misses kernel_rdma_direct_reads kernel_rdma_direct_read_min_bytes kernel_rdma_direct_read_ops kernel_rdma_direct_read_bytes kernel_rdma_direct_read_fallbacks kernel_rdma_direct_read_errors kernel_rdma_direct_writes kernel_rdma_direct_write_min_bytes kernel_rdma_direct_write_ops kernel_rdma_direct_write_bytes kernel_rdma_direct_write_fallbacks kernel_rdma_direct_write_errors kernel_read_rdma_folio_direct_ops kernel_read_rdma_folio_direct_bytes kernel_write_rdma_direct_iter_bytes kernel_write_rdma_bounce_copy_bytes; do
                   [ -e "/sys/module/seaweedvfs/parameters/${param}" ] || fresh_module=false
                 done
                 direct_reads="$(cat /sys/module/seaweedvfs/parameters/kernel_rdma_direct_reads 2>/dev/null || true)"
@@ -139,7 +139,7 @@ spec:
                     ;;
                   esac
               done
-              for param in rdma_read_window_ios kernel_rdma_direct_read_min_bytes kernel_rdma_direct_read_ops kernel_rdma_direct_read_bytes kernel_rdma_direct_read_fallbacks kernel_rdma_direct_read_errors kernel_rdma_direct_write_min_bytes kernel_rdma_direct_write_ops kernel_rdma_direct_write_bytes kernel_rdma_direct_write_fallbacks kernel_rdma_direct_write_errors kernel_read_rdma_folio_direct_ops kernel_read_rdma_folio_direct_bytes kernel_write_rdma_direct_iter_bytes kernel_write_rdma_bounce_copy_bytes; do
+              for param in rdma_read_window_ios kernel_rdma_connection_slots kernel_rdma_connection_slot_misses kernel_rdma_direct_read_min_bytes kernel_rdma_direct_read_ops kernel_rdma_direct_read_bytes kernel_rdma_direct_read_fallbacks kernel_rdma_direct_read_errors kernel_rdma_direct_write_min_bytes kernel_rdma_direct_write_ops kernel_rdma_direct_write_bytes kernel_rdma_direct_write_fallbacks kernel_rdma_direct_write_errors kernel_read_rdma_folio_direct_ops kernel_read_rdma_folio_direct_bytes kernel_write_rdma_direct_iter_bytes kernel_write_rdma_bounce_copy_bytes; do
                 [ -e "/sys/module/seaweedvfs/parameters/${param}" ] || {
                   echo "ERROR: seaweedvfs parameter ${param} is missing; stale kernel module is loaded" >&2
                   exit 1
