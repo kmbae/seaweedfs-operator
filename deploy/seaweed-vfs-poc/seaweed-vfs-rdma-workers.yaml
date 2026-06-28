@@ -102,12 +102,15 @@ spec:
               fi
               if lsmod | grep -q '^seaweedvfs '; then
                 fresh_module=true
-                for param in rdma_read_window_ios kernel_rdma_connection_slots kernel_rdma_connection_slot_misses kernel_rdma_direct_reads kernel_rdma_direct_read_min_bytes kernel_rdma_direct_read_ops kernel_rdma_direct_read_bytes kernel_rdma_direct_read_fallbacks kernel_rdma_direct_read_errors kernel_rdma_direct_writes kernel_rdma_direct_write_min_bytes kernel_rdma_defer_write_commits kernel_rdma_direct_write_ops kernel_rdma_direct_write_bytes kernel_rdma_direct_write_fallbacks kernel_rdma_direct_write_errors kernel_read_rdma_folio_direct_ops kernel_read_rdma_folio_direct_bytes kernel_write_rdma_direct_iter_bytes kernel_write_rdma_bounce_copy_bytes kernel_write_rdma_deferred_queued kernel_write_rdma_deferred_flushed kernel_write_rdma_deferred_flushes kernel_write_rdma_deferred_errors kernel_write_rdma_commit_batch_ops kernel_write_rdma_commit_batch_entries kernel_write_rdma_commit_batch_errors; do
+                expected_io_max="${KERNEL_RDMA_IO_MAX:-16777216}"
+                for param in kernel_rdma_io_max rdma_read_window_ios kernel_rdma_connection_slots kernel_rdma_connection_slot_misses kernel_rdma_direct_reads kernel_rdma_direct_read_min_bytes kernel_rdma_direct_read_ops kernel_rdma_direct_read_bytes kernel_rdma_direct_read_fallbacks kernel_rdma_direct_read_errors kernel_rdma_direct_writes kernel_rdma_direct_write_min_bytes kernel_rdma_defer_write_commits kernel_rdma_direct_write_ops kernel_rdma_direct_write_bytes kernel_rdma_direct_write_fallbacks kernel_rdma_direct_write_errors kernel_read_rdma_folio_direct_ops kernel_read_rdma_folio_direct_bytes kernel_write_rdma_direct_iter_bytes kernel_write_rdma_bounce_copy_bytes kernel_write_rdma_deferred_queued kernel_write_rdma_deferred_flushed kernel_write_rdma_deferred_flushes kernel_write_rdma_deferred_errors kernel_write_rdma_commit_batch_ops kernel_write_rdma_commit_batch_entries kernel_write_rdma_commit_batch_errors; do
                   [ -e "/sys/module/seaweedvfs/parameters/${param}" ] || fresh_module=false
                 done
+                io_max="$(cat /sys/module/seaweedvfs/parameters/kernel_rdma_io_max 2>/dev/null || true)"
                 direct_reads="$(cat /sys/module/seaweedvfs/parameters/kernel_rdma_direct_reads 2>/dev/null || true)"
                 direct_writes="$(cat /sys/module/seaweedvfs/parameters/kernel_rdma_direct_writes 2>/dev/null || true)"
                 defer_write_commits="$(cat /sys/module/seaweedvfs/parameters/kernel_rdma_defer_write_commits 2>/dev/null || true)"
+                [ "${io_max}" = "${expected_io_max}" ] || fresh_module=false
                 case "${direct_reads}" in
                   Y|y|1|true|TRUE) ;;
                   *) fresh_module=false ;;
@@ -142,9 +145,16 @@ spec:
                     echo "ERROR: seaweedvfs ${param} is not enabled; got '${value}'" >&2
                     exit 1
                     ;;
-                  esac
+                esac
               done
-              for param in rdma_read_window_ios kernel_rdma_connection_slots kernel_rdma_connection_slot_misses kernel_rdma_direct_read_min_bytes kernel_rdma_direct_read_ops kernel_rdma_direct_read_bytes kernel_rdma_direct_read_fallbacks kernel_rdma_direct_read_errors kernel_rdma_direct_write_min_bytes kernel_rdma_defer_write_commits kernel_rdma_direct_write_ops kernel_rdma_direct_write_bytes kernel_rdma_direct_write_fallbacks kernel_rdma_direct_write_errors kernel_read_rdma_folio_direct_ops kernel_read_rdma_folio_direct_bytes kernel_write_rdma_direct_iter_bytes kernel_write_rdma_bounce_copy_bytes kernel_write_rdma_deferred_queued kernel_write_rdma_deferred_flushed kernel_write_rdma_deferred_flushes kernel_write_rdma_deferred_errors kernel_write_rdma_commit_batch_ops kernel_write_rdma_commit_batch_entries kernel_write_rdma_commit_batch_errors; do
+              expected_io_max="${KERNEL_RDMA_IO_MAX:-16777216}"
+              actual_io_max="$(cat /sys/module/seaweedvfs/parameters/kernel_rdma_io_max 2>/dev/null || true)"
+              if [ "${actual_io_max}" != "${expected_io_max}" ]; then
+                echo "ERROR: seaweedvfs kernel_rdma_io_max=${actual_io_max:-missing}; want ${expected_io_max}" >&2
+                exit 1
+              fi
+              echo "seaweedvfs kernel_rdma_io_max=${actual_io_max}"
+              for param in kernel_rdma_io_max rdma_read_window_ios kernel_rdma_connection_slots kernel_rdma_connection_slot_misses kernel_rdma_direct_read_min_bytes kernel_rdma_direct_read_ops kernel_rdma_direct_read_bytes kernel_rdma_direct_read_fallbacks kernel_rdma_direct_read_errors kernel_rdma_direct_write_min_bytes kernel_rdma_defer_write_commits kernel_rdma_direct_write_ops kernel_rdma_direct_write_bytes kernel_rdma_direct_write_fallbacks kernel_rdma_direct_write_errors kernel_read_rdma_folio_direct_ops kernel_read_rdma_folio_direct_bytes kernel_write_rdma_direct_iter_bytes kernel_write_rdma_bounce_copy_bytes kernel_write_rdma_deferred_queued kernel_write_rdma_deferred_flushed kernel_write_rdma_deferred_flushes kernel_write_rdma_deferred_errors kernel_write_rdma_commit_batch_ops kernel_write_rdma_commit_batch_entries kernel_write_rdma_commit_batch_errors; do
                 [ -e "/sys/module/seaweedvfs/parameters/${param}" ] || {
                   echo "ERROR: seaweedvfs parameter ${param} is missing; stale kernel module is loaded" >&2
                   exit 1
