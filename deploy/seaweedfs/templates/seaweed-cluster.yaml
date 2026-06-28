@@ -57,12 +57,7 @@ spec:
       {{- with .Values.volume.extraArgs }}
       {{- toYaml . | nindent 6 }}
       {{- end }}
-      {{- if and .Values.rdma.enabled .Values.rdma.nativeVolume.enabled }}
-      - {{ printf "-volume.rdma.engineSocket=%s" .Values.rdma.nativeVolume.socketPath | quote }}
-      - {{ printf "-volume.rdma.readMaxSizeMB=%v" .Values.rdma.nativeVolume.readMaxSizeMB | quote }}
-      - {{ printf "-volume.rdma.readLeaseTTL=%s" .Values.rdma.nativeVolume.readLeaseTTL | quote }}
-      - {{ printf "-volume.rdma.readBufferSizeMB=%v" .Values.rdma.nativeVolume.readBufferSizeMB | quote }}
-      {{- end }}
+      {{- include "seaweedfs.rdmaVolumeExtraArgs" . | nindent 6 }}
     {{- end }}
     {{- if not $useTopology }}
     {{- with .Values.volume.rack }}
@@ -122,10 +117,7 @@ spec:
       {{- end }}
       {{- if and $.Values.rdma.enabled $.Values.rdma.nativeVolume.enabled }}
       extraArgs:
-        - {{ printf "-volume.rdma.engineSocket=%s" $.Values.rdma.nativeVolume.socketPath | quote }}
-        - {{ printf "-volume.rdma.readMaxSizeMB=%v" $.Values.rdma.nativeVolume.readMaxSizeMB | quote }}
-        - {{ printf "-volume.rdma.readLeaseTTL=%s" $.Values.rdma.nativeVolume.readLeaseTTL | quote }}
-        - {{ printf "-volume.rdma.readBufferSizeMB=%v" $.Values.rdma.nativeVolume.readBufferSizeMB | quote }}
+        {{- include "seaweedfs.rdmaVolumeExtraArgs" $ | nindent 8 }}
       {{- end }}
       {{- include "seaweedfs.rdmaVolumeGroup" $ | nindent 6 }}
     {{- end }}

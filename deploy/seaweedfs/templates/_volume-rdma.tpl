@@ -2,6 +2,22 @@
 RDMA annotations, volumes, volumeMounts, sidecars for a volume group or volumeTopology entry.
 Usage: {{- include "seaweedfs.rdmaVolumeGroup" . | nindent 4 }}
 */}}
+{{- define "seaweedfs.rdmaVolumeExtraArgs" -}}
+{{- if and .Values.rdma.enabled .Values.rdma.nativeVolume.enabled }}
+- {{ printf "-volume.rdma.engineSocket=%s" .Values.rdma.nativeVolume.socketPath | quote }}
+- {{ printf "-volume.rdma.readMaxSizeMB=%v" .Values.rdma.nativeVolume.readMaxSizeMB | quote }}
+- {{ printf "-volume.rdma.readLeaseTTL=%s" .Values.rdma.nativeVolume.readLeaseTTL | quote }}
+- {{ printf "-volume.rdma.readBufferSizeMB=%v" .Values.rdma.nativeVolume.readBufferSizeMB | quote }}
+{{- if .Values.rdma.nativeVolume.embedded }}
+- "-volume.rdma.embedded=true"
+- {{ printf "-volume.rdma.embeddedFallbackSocket=%v" .Values.rdma.nativeVolume.embeddedFallbackSocket | quote }}
+- {{ printf "-volume.rdma.device=%s" (default "auto" .Values.rdma.deviceName) | quote }}
+- {{ printf "-volume.rdma.port=%v" .Values.rdma.nativeVolume.hcaPort | quote }}
+- {{ printf "-volume.rdma.gidIndex=%v" .Values.rdma.nativeVolume.gidIndex | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
+
 {{- define "seaweedfs.rdmaSidecarsOnly" -}}
 {{- if .Values.rdma.enabled }}
 {{- $rdmaMode := default "sriov" .Values.rdma.mode }}

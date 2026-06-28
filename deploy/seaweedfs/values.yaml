@@ -101,6 +101,10 @@ rdma:
   enableNativeVolumeRDMA: true
   nativeVolume:
     enabled: true
+    # Enables the in-process SeaweedFS volume server RDMA transport. Requires a
+    # SeaweedFS image built with the embedded RDMA verbs implementation.
+    embedded: false
+    embeddedFallbackSocket: true
     socketPath: /tmp/rdma/volume-rdma-engine.sock
     provider: verbs
     hcaPort: 1
