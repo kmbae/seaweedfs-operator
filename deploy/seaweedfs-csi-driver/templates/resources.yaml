@@ -206,10 +206,20 @@ spec:
           command:
             - sh
             - -c
-            - cp /usr/bin/weed /weed-bin/weed && chmod +x /weed-bin/weed
+            - |
+              cp /usr/bin/weed /weed-bin/weed
+              chmod +x /weed-bin/weed
+              {{ if and .Values.rdma.enabled (eq (default "sidecar" .Values.rdma.mount.mode) "native") }}
+              mkdir -p /rdma-runtime-libs/usr
+              cp -a /usr/lib /rdma-runtime-libs/usr/
+              {{ end }}
           volumeMounts:
             - name: weed-bin
               mountPath: /weed-bin
+            {{ if and .Values.rdma.enabled (eq (default "sidecar" .Values.rdma.mount.mode) "native") }}
+            - name: rdma-runtime-libs
+              mountPath: /rdma-runtime-libs
+            {{ end }}
       containers:
         - name: seaweedfs-mount
           securityContext: 
@@ -250,6 +260,12 @@ spec:
               value: {{ .Values.rdma.mount.timeoutMs | quote }}
             - name: WEED_REAL_BINARY
               value: "/weed-bin/weed"
+            {{ if and .Values.rdma.enabled (eq (default "sidecar" .Values.rdma.mount.mode) "native") }}
+            - name: LD_LIBRARY_PATH
+              value: "/rdma-runtime-libs/usr/lib:/usr/lib:/lib"
+            - name: IBV_DRIVERS
+              value: "/rdma-runtime-libs/usr/lib/libibverbs"
+            {{ end }}
             {{ if and .Values.rdma.enabled .Values.rdma.workerEngine.enabled }}
             - name: RDMA_ENGINE_SOCKET
               value: {{ .Values.rdma.workerEngine.socketPath | quote }}
@@ -276,6 +292,11 @@ spec:
               mountPath: /var/lib/seaweedfs-mount
             - name: csi-rdma-scripts
               mountPath: /csi-rdma
+            {{ if and .Values.rdma.enabled (eq (default "sidecar" .Values.rdma.mount.mode) "native") }}
+            - name: rdma-runtime-libs
+              mountPath: /rdma-runtime-libs
+              readOnly: true
+            {{ end }}
             {{ if and .Values.rdma.enabled .Values.rdma.workerEngine.enabled }}
             - name: rdma-engine-socket
               mountPath: {{ .Values.rdma.workerEngine.socketDir | quote }}
@@ -447,6 +468,10 @@ spec:
           configMap:
             name: {{ .Values.rdma.configMapName }}
             defaultMode: 0755
+        {{ if and .Values.rdma.enabled (eq (default "sidecar" .Values.rdma.mount.mode) "native") }}
+        - name: rdma-runtime-libs
+          emptyDir: {}
+        {{ end }}
         {{ if and .Values.rdma.enabled .Values.rdma.workerEngine.enabled }}
         - name: rdma-engine-socket
           emptyDir: {}
