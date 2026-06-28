@@ -1,6 +1,6 @@
 # Seaweed CR name (defaults to Helm release name)
 name: ""
-image: kmbae27/seaweedfs:rdma-embedded-20260628-ee8f249b2
+image: kmbae27/seaweedfs:rdma-pipeline-20260628-322c4c43c
 volumeServerDiskCount: 1
 hostSuffix: ""
 labels: {}
@@ -119,7 +119,7 @@ rdma:
     gidIndex: 0
     fallbackMock: false
     serviceLevel: 0
-    readMaxSizeMB: 16
+    readMaxSizeMB: 64
     readLeaseTTL: 30s
     readBufferSizeMB: 4
   volumeGrpcMaxMessageBytes: "134217728"
