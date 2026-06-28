@@ -23,7 +23,7 @@ images:
   # v1.4.20+ applies PVC capacity as collectionQuotaMB at mount time (PR #279).
   csiDriver: chrislusf/seaweedfs-csi-driver:v1.4.20
   mount: chrislusf/seaweedfs-mount:v1.4.20
-  weedCopy: kmbae27/seaweedfs:rdma-20260628-9815f8cea
+  weedCopy: kmbae27/seaweedfs:rdma-mount-native-20260628-ab8b9787b
   nodeRegistrar: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.8.0
   provisioner: registry.k8s.io/sig-storage/csi-provisioner:v3.5.0
   attacher: registry.k8s.io/sig-storage/csi-attacher:v4.3.0
@@ -43,10 +43,15 @@ rdma:
   volumeNamespace: seaweedfs
   volumeNetworkName: "default/sriov-ib-network"
   mount:
+    mode: native
+    device: auto
+    port: 1
+    gidIndex: 0
+    serviceLevel: 0
     maxConcurrent: 4
     timeoutMs: 5000
   workerEngine:
-    enabled: true
+    enabled: false
     image: kmbae27/rdma-engine:rdma-20260628-f584cbeaf
     imagePullPolicy: Always
     deviceName: ""
@@ -73,7 +78,7 @@ rdma:
       limits:
         memory: 1Gi
   workerSidecar:
-    enabled: true
+    enabled: false
     image: kmbae27/rdma-sidecar:rdma-20260628-9815f8cea
     imagePullPolicy: Always
     port: 18082

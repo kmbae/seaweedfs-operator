@@ -195,7 +195,7 @@ spec:
     spec:
       priorityClassName: system-node-critical
       serviceAccountName: seaweedfs-node-sa
-{{ if and .Values.rdma.enabled .Values.rdma.workerEngine.enabled (eq (default "sriov" .Values.rdma.mode) "hostPF") }}
+{{ if and .Values.rdma.enabled (eq (default "sriov" .Values.rdma.mode) "hostPF") }}
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
 {{ end }}
@@ -228,12 +228,22 @@ spec:
               value: "unix:///var/lib/seaweedfs-mount/seaweedfs-mount.sock"
             - name: RDMA_ENABLED
               value: "true"
+            - name: RDMA_MODE
+              value: {{ default "sidecar" .Values.rdma.mount.mode | quote }}
             - name: RDMA_SIDECAR_ADDR
               value: "127.0.0.1:{{ .Values.rdma.gatewayPort }}"
             - name: RDMA_FALLBACK
               value: "true"
             - name: RDMA_READ_ONLY
               value: "false"
+            - name: RDMA_DEVICE
+              value: {{ default "auto" .Values.rdma.mount.device | quote }}
+            - name: RDMA_PORT
+              value: {{ .Values.rdma.mount.port | quote }}
+            - name: RDMA_GID_INDEX
+              value: {{ .Values.rdma.mount.gidIndex | quote }}
+            - name: RDMA_SERVICE_LEVEL
+              value: {{ .Values.rdma.mount.serviceLevel | quote }}
             - name: RDMA_MAX_CONCURRENT
               value: {{ .Values.rdma.mount.maxConcurrent | quote }}
             - name: RDMA_TIMEOUT_MS
@@ -270,6 +280,7 @@ spec:
             - name: rdma-engine-socket
               mountPath: {{ .Values.rdma.workerEngine.socketDir | quote }}
             {{ end }}
+        {{ if and .Values.rdma.enabled (ne (default "sidecar" .Values.rdma.mount.mode) "native") }}
         - name: rdma-gateway
           image: {{ .Values.rdma.gatewayImage }}
           imagePullPolicy: IfNotPresent
@@ -318,6 +329,7 @@ spec:
               memory: 64Mi
             limits:
               memory: 256Mi
+        {{ end }}
         {{ if and .Values.rdma.enabled .Values.rdma.workerEngine.enabled .Values.rdma.workerSidecar.enabled }}
         - name: rdma-sidecar
           image: {{ .Values.rdma.workerSidecar.image }}

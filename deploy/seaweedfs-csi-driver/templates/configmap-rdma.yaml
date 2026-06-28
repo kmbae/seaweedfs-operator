@@ -107,11 +107,16 @@ data:
 
     exec "${REAL_WEED}" "$@" \
       -rdma.enabled=true \
+      -rdma.mode="${RDMA_MODE:-sidecar}" \
       -rdma.sidecar="${RDMA_SIDECAR_ADDR:-127.0.0.1:18081}" \
       -rdma.fallback="${RDMA_FALLBACK:-true}" \
       -rdma.readOnly="${RDMA_READ_ONLY:-false}" \
       -rdma.maxConcurrent="${RDMA_MAX_CONCURRENT:-64}" \
-      -rdma.timeoutMs="${RDMA_TIMEOUT_MS:-5000}"
+      -rdma.timeoutMs="${RDMA_TIMEOUT_MS:-5000}" \
+      -rdma.device="${RDMA_DEVICE:-auto}" \
+      -rdma.port="${RDMA_PORT:-1}" \
+      -rdma.gidIndex="${RDMA_GID_INDEX:-0}" \
+      -rdma.serviceLevel="${RDMA_SERVICE_LEVEL:-0}"
 
   rdma-gateway.py: |
     #!/usr/bin/env python3
