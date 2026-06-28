@@ -241,6 +241,34 @@ assert_metric_unchanged() {
   log "OK: ${label} unchanged (${after})"
 }
 
+metric_delta() {
+  local before_payload=$1
+  local after_payload=$2
+  local counter=$3
+  local before
+  local after
+  before="$(metric_counter "${before_payload}" "${counter}")"
+  after="$(metric_counter "${after_payload}" "${counter}")"
+  printf '%s\n' "$((after - before))"
+}
+
+log_metric_average_size() {
+  local label=$1
+  local before_payload=$2
+  local after_payload=$3
+  local count_counter=$4
+  local byte_counter=$5
+  local count_delta
+  local byte_delta
+  count_delta="$(metric_delta "${before_payload}" "${after_payload}" "${count_counter}")"
+  byte_delta="$(metric_delta "${before_payload}" "${after_payload}" "${byte_counter}")"
+  if [ "${count_delta}" -gt 0 ]; then
+    log "INFO: ${label}: desc_delta=${count_delta} byte_delta=${byte_delta} avg_desc_bytes=$((byte_delta / count_delta))"
+  else
+    log "INFO: ${label}: desc_delta=${count_delta} byte_delta=${byte_delta}"
+  fi
+}
+
 assert_volume_native_ready() {
   local status_payload=$1
   local endpoint_payload=$2
@@ -512,6 +540,8 @@ if [ "${RUN_METRICS}" = "true" ]; then
   assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} native volume read bytes" "${reader_metrics_before}" "${reader_metrics_after}" volume_native_rdma_read_desc_bytes
   assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} handler_read_rdma_prepare_replies" "${reader_metrics_before}" "${reader_metrics_after}" handler_read_rdma_prepare_replies
   assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} handler_read_rdma_release_replies" "${reader_metrics_before}" "${reader_metrics_after}" handler_read_rdma_release_replies
+  log_metric_average_size "${writer_worker}/${WORKER_CONTAINER} native volume write descriptors" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_desc_success volume_native_rdma_write_desc_bytes
+  log_metric_average_size "${reader_workers[0]}/${WORKER_CONTAINER} native volume read descriptors" "${reader_metrics_before}" "${reader_metrics_after}" volume_native_rdma_read_desc_success volume_native_rdma_read_desc_bytes
   assert_metric_unchanged "${writer_worker}/${WORKER_CONTAINER} native volume write desc errors" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_desc_post_errors
   assert_metric_unchanged "${writer_worker}/${WORKER_CONTAINER} native volume write commit errors" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_errors
   assert_metric_unchanged "${writer_worker}/${WORKER_CONTAINER} native volume write commit batch errors" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_batch_errors
