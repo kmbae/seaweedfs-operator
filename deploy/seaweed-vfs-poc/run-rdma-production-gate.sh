@@ -268,6 +268,9 @@ writer_deferred_queued_before="$(worker_counter "${writer_worker}" kernel_write_
 writer_deferred_flushed_before="$(worker_counter "${writer_worker}" kernel_write_rdma_deferred_flushed)"
 writer_deferred_flushes_before="$(worker_counter "${writer_worker}" kernel_write_rdma_deferred_flushes)"
 writer_deferred_errors_before="$(worker_counter "${writer_worker}" kernel_write_rdma_deferred_errors)"
+writer_commit_batch_ops_before="$(worker_counter "${writer_worker}" kernel_write_rdma_commit_batch_ops)"
+writer_commit_batch_entries_before="$(worker_counter "${writer_worker}" kernel_write_rdma_commit_batch_entries)"
+writer_commit_batch_errors_before="$(worker_counter "${writer_worker}" kernel_write_rdma_commit_batch_errors)"
 reader_read_desc_before="$(worker_counter "${reader_workers[0]}" kernel_read_rdma_desc_ops)"
 reader_read_completions_before="$(worker_counter "${reader_workers[0]}" kernel_rdma_remote_read_completions)"
 reader_read_direct_before="$(worker_counter "${reader_workers[0]}" kernel_read_rdma_folio_direct_bytes)"
@@ -337,6 +340,9 @@ assert_counter_increased "kernel_write_rdma_deferred_queued on ${writer_worker}"
 assert_counter_increased "kernel_write_rdma_deferred_flushed on ${writer_worker}" "${writer_deferred_flushed_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_deferred_flushed)"
 assert_counter_increased "kernel_write_rdma_deferred_flushes on ${writer_worker}" "${writer_deferred_flushes_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_deferred_flushes)"
 assert_counter_unchanged "kernel_write_rdma_deferred_errors on ${writer_worker}" "${writer_deferred_errors_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_deferred_errors)"
+assert_counter_increased "kernel_write_rdma_commit_batch_ops on ${writer_worker}" "${writer_commit_batch_ops_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_commit_batch_ops)"
+assert_counter_increased "kernel_write_rdma_commit_batch_entries on ${writer_worker}" "${writer_commit_batch_entries_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_commit_batch_entries)"
+assert_counter_unchanged "kernel_write_rdma_commit_batch_errors on ${writer_worker}" "${writer_commit_batch_errors_before}" "$(worker_counter "${writer_worker}" kernel_write_rdma_commit_batch_errors)"
 if [ "${ASSERT_KERNEL_READ_COUNTERS}" = "true" ]; then
   assert_counter_increased "kernel_rdma_direct_read_ops on ${reader_workers[0]}" "${reader_direct_ops_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_direct_read_ops)"
   assert_counter_increased "kernel_rdma_direct_read_bytes on ${reader_workers[0]}" "${reader_direct_bytes_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_direct_read_bytes)"
@@ -363,7 +369,7 @@ if [ "${RUN_METRICS}" = "true" ]; then
   assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write commit" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_success
   assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write bytes" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_bytes
   assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} handler_write_rdma_prepare_ops" "${writer_metrics_before}" "${writer_metrics_after}" handler_write_rdma_prepare_ops
-  assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} handler_write_rdma_commit_ops" "${writer_metrics_before}" "${writer_metrics_after}" handler_write_rdma_commit_ops
+  assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} handler_write_rdma_commit_batch_ops" "${writer_metrics_before}" "${writer_metrics_after}" handler_write_rdma_commit_batch_ops
   assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} native volume read desc" "${reader_metrics_before}" "${reader_metrics_after}" volume_native_rdma_read_desc_success
   assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} native volume read bytes" "${reader_metrics_before}" "${reader_metrics_after}" volume_native_rdma_read_desc_bytes
   assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} handler_read_rdma_prepare_replies" "${reader_metrics_before}" "${reader_metrics_after}" handler_read_rdma_prepare_replies

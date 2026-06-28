@@ -67,6 +67,8 @@ print_kernel_counters() {
       kernel_write_rdma_direct_iter_bytes kernel_write_rdma_fallbacks \
       kernel_write_rdma_deferred_queued kernel_write_rdma_deferred_flushed \
       kernel_write_rdma_deferred_flushes kernel_write_rdma_deferred_errors \
+      kernel_write_rdma_commit_batch_ops kernel_write_rdma_commit_batch_entries \
+      kernel_write_rdma_commit_batch_errors \
       kernel_rdma_remote_write_posts \
       kernel_rdma_remote_write_completions kernel_rdma_remote_write_failures \
       kernel_rdma_remote_write_bytes; do
