@@ -212,6 +212,10 @@ spec:
               {{ if and .Values.rdma.enabled (eq (default "sidecar" .Values.rdma.mount.mode) "native") }}
               mkdir -p /rdma-runtime-libs/usr
               cp -a /usr/lib /rdma-runtime-libs/usr/
+              for provider in /rdma-runtime-libs/usr/lib/libibverbs/*-rdmav*.so; do
+                [ -e "$provider" ] || continue
+                ln -sf "libibverbs/$(basename "$provider")" "/rdma-runtime-libs/usr/lib/$(basename "$provider")"
+              done
               {{ end }}
           volumeMounts:
             - name: weed-bin
@@ -262,8 +266,10 @@ spec:
               value: "/weed-bin/weed"
             {{ if and .Values.rdma.enabled (eq (default "sidecar" .Values.rdma.mount.mode) "native") }}
             - name: LD_LIBRARY_PATH
-              value: "/rdma-runtime-libs/usr/lib:/usr/lib:/lib"
+              value: "/rdma-runtime-libs/usr/lib:/rdma-runtime-libs/usr/lib/libibverbs:/usr/lib:/lib"
             - name: IBV_DRIVERS
+              value: "mlx5"
+            - name: IBV_DRIVERS_PATH
               value: "/rdma-runtime-libs/usr/lib/libibverbs"
             {{ end }}
             {{ if and .Values.rdma.enabled .Values.rdma.workerEngine.enabled }}
