@@ -104,9 +104,15 @@ spec:
                 fresh_module=true
                 expected_io_max="${KERNEL_RDMA_IO_MAX:-16777216}"
                 expected_send_window="${KERNEL_RDMA_SEND_WINDOW:-16}"
+                expected_srcversion="${KERNEL_MODULE_SRCVERSION:-}"
                 for param in kernel_rdma_io_max kernel_rdma_send_window kernel_rdma_send_batches kernel_rdma_send_batch_wrs kernel_rdma_send_max_batch_wrs rdma_read_window_ios rdma_write_window_ios kernel_rdma_connection_slots kernel_rdma_connection_slot_misses kernel_rdma_direct_reads kernel_rdma_direct_read_min_bytes kernel_rdma_direct_read_ops kernel_rdma_direct_read_bytes kernel_rdma_direct_read_fallbacks kernel_rdma_direct_read_errors kernel_rdma_read_prepare_batch_ops kernel_rdma_read_prepare_batch_descs kernel_rdma_read_prepare_batch_fallbacks kernel_rdma_direct_writes kernel_rdma_direct_write_min_bytes kernel_rdma_defer_write_commits kernel_rdma_async_writeback kernel_rdma_pagecache_writeback kernel_rdma_async_writeback_max_bytes kernel_rdma_direct_write_ops kernel_rdma_direct_write_bytes kernel_rdma_direct_write_fallbacks kernel_rdma_direct_write_errors kernel_rdma_write_prepare_batch_ops kernel_rdma_write_prepare_batch_descs kernel_rdma_write_prepare_batch_fallbacks kernel_read_rdma_folio_direct_ops kernel_read_rdma_folio_direct_bytes kernel_write_rdma_direct_iter_bytes kernel_write_rdma_bounce_copy_bytes kernel_write_rdma_deferred_queued kernel_write_rdma_deferred_flushed kernel_write_rdma_deferred_flushes kernel_write_rdma_deferred_errors kernel_write_rdma_commit_batch_ops kernel_write_rdma_commit_batch_entries kernel_write_rdma_commit_batch_errors kernel_write_rdma_async_queued kernel_write_rdma_async_flushed kernel_write_rdma_async_flushes kernel_write_rdma_async_errors kernel_write_rdma_async_bytes kernel_write_rdma_async_backpressure kernel_write_rdma_pagecache_write_ops kernel_write_rdma_pagecache_write_bytes kernel_write_rdma_pagecache_dirty_folios kernel_write_rdma_pagecache_writepages_ops kernel_write_rdma_pagecache_writeback_ops kernel_write_rdma_pagecache_writeback_bytes kernel_write_rdma_pagecache_writeback_fallbacks kernel_write_rdma_pagecache_writeback_errors; do
                   [ -e "/sys/module/seaweedvfs/parameters/${param}" ] || fresh_module=false
                 done
+                loaded_srcversion="$(cat /sys/module/seaweedvfs/srcversion 2>/dev/null || true)"
+                if [ -n "${expected_srcversion}" ] && [ "${loaded_srcversion}" != "${expected_srcversion}" ]; then
+                  echo "loaded seaweedvfs srcversion=${loaded_srcversion:-missing}; want ${expected_srcversion}"
+                  fresh_module=false
+                fi
                 io_max="$(cat /sys/module/seaweedvfs/parameters/kernel_rdma_io_max 2>/dev/null || true)"
                 send_window="$(cat /sys/module/seaweedvfs/parameters/kernel_rdma_send_window 2>/dev/null || true)"
                 direct_reads="$(cat /sys/module/seaweedvfs/parameters/kernel_rdma_direct_reads 2>/dev/null || true)"
@@ -177,6 +183,13 @@ spec:
                 exit 1
               fi
               echo "seaweedvfs kernel_rdma_send_window=${actual_send_window}"
+              expected_srcversion="${KERNEL_MODULE_SRCVERSION:-}"
+              actual_srcversion="$(cat /sys/module/seaweedvfs/srcversion 2>/dev/null || true)"
+              if [ -n "${expected_srcversion}" ] && [ "${actual_srcversion}" != "${expected_srcversion}" ]; then
+                echo "ERROR: seaweedvfs srcversion=${actual_srcversion:-missing}; want ${expected_srcversion}" >&2
+                exit 1
+              fi
+              [ -z "${expected_srcversion}" ] || echo "seaweedvfs srcversion=${actual_srcversion}"
               for param in kernel_rdma_io_max kernel_rdma_send_window kernel_rdma_send_batches kernel_rdma_send_batch_wrs kernel_rdma_send_max_batch_wrs rdma_read_window_ios rdma_write_window_ios kernel_rdma_connection_slots kernel_rdma_connection_slot_misses kernel_rdma_direct_read_min_bytes kernel_rdma_direct_read_ops kernel_rdma_direct_read_bytes kernel_rdma_direct_read_fallbacks kernel_rdma_direct_read_errors kernel_rdma_read_prepare_batch_ops kernel_rdma_read_prepare_batch_descs kernel_rdma_read_prepare_batch_fallbacks kernel_rdma_direct_write_min_bytes kernel_rdma_defer_write_commits kernel_rdma_async_writeback kernel_rdma_pagecache_writeback kernel_rdma_async_writeback_max_bytes kernel_rdma_direct_write_ops kernel_rdma_direct_write_bytes kernel_rdma_direct_write_fallbacks kernel_rdma_direct_write_errors kernel_rdma_write_prepare_batch_ops kernel_rdma_write_prepare_batch_descs kernel_rdma_write_prepare_batch_fallbacks kernel_read_rdma_folio_direct_ops kernel_read_rdma_folio_direct_bytes kernel_write_rdma_direct_iter_bytes kernel_write_rdma_bounce_copy_bytes kernel_write_rdma_deferred_queued kernel_write_rdma_deferred_flushed kernel_write_rdma_deferred_flushes kernel_write_rdma_deferred_errors kernel_write_rdma_commit_batch_ops kernel_write_rdma_commit_batch_entries kernel_write_rdma_commit_batch_errors kernel_write_rdma_async_queued kernel_write_rdma_async_flushed kernel_write_rdma_async_flushes kernel_write_rdma_async_errors kernel_write_rdma_async_bytes kernel_write_rdma_async_backpressure kernel_write_rdma_pagecache_write_ops kernel_write_rdma_pagecache_write_bytes kernel_write_rdma_pagecache_dirty_folios kernel_write_rdma_pagecache_writepages_ops kernel_write_rdma_pagecache_writeback_ops kernel_write_rdma_pagecache_writeback_bytes kernel_write_rdma_pagecache_writeback_fallbacks kernel_write_rdma_pagecache_writeback_errors; do
                 [ -e "/sys/module/seaweedvfs/parameters/${param}" ] || {
                   echo "ERROR: seaweedvfs parameter ${param} is missing; stale kernel module is loaded" >&2
@@ -267,6 +280,8 @@ spec:
               value: "262144"
             - name: KERNEL_RDMA_PAGECACHE_WRITEBACK
               value: "1"
+            - name: KERNEL_MODULE_SRCVERSION
+              value: BFE38021DBC9EF5610550D1
             - name: RDMA_READ_HINTS
               value: "0"
             - name: RDMA_WRITE_HINTS
