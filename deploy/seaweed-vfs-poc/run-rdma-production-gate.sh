@@ -366,8 +366,9 @@ if [ "${RUN_METRICS}" = "true" ]; then
   writer_metrics_after="$(fetch_worker_control_metrics "${writer_worker}")"
   reader_metrics_after="$(fetch_worker_control_metrics "${reader_workers[0]}")"
   assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write desc" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_desc_success
-  assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write commit" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_success
-  assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write bytes" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_bytes
+  assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write commit batch" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_batch_success
+  assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write commit batch entries" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_batch_entry_success
+  assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write bytes" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_batch_bytes
   assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} handler_write_rdma_prepare_ops" "${writer_metrics_before}" "${writer_metrics_after}" handler_write_rdma_prepare_ops
   assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} handler_write_rdma_commit_batch_ops" "${writer_metrics_before}" "${writer_metrics_after}" handler_write_rdma_commit_batch_ops
   assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} native volume read desc" "${reader_metrics_before}" "${reader_metrics_after}" volume_native_rdma_read_desc_success
@@ -376,6 +377,9 @@ if [ "${RUN_METRICS}" = "true" ]; then
   assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} handler_read_rdma_release_replies" "${reader_metrics_before}" "${reader_metrics_after}" handler_read_rdma_release_replies
   assert_metric_unchanged "${writer_worker}/${WORKER_CONTAINER} native volume write desc errors" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_desc_post_errors
   assert_metric_unchanged "${writer_worker}/${WORKER_CONTAINER} native volume write commit errors" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_errors
+  assert_metric_unchanged "${writer_worker}/${WORKER_CONTAINER} native volume write commit batch errors" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_batch_errors
+  assert_metric_unchanged "${writer_worker}/${WORKER_CONTAINER} native volume write commit batch post errors" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_batch_post_errors
+  assert_metric_unchanged "${writer_worker}/${WORKER_CONTAINER} native volume write commit batch entry errors" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_batch_entry_errors
   assert_metric_unchanged "${writer_worker}/${WORKER_CONTAINER} native volume write peer errors" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_peer_connect_errors
   assert_metric_unchanged "${reader_workers[0]}/${WORKER_CONTAINER} native volume read errors" "${reader_metrics_before}" "${reader_metrics_after}" volume_native_rdma_read_desc_errors
   assert_metric_unchanged "${reader_workers[0]}/${WORKER_CONTAINER} native volume read peer errors" "${reader_metrics_before}" "${reader_metrics_after}" volume_native_rdma_peer_connect_errors
