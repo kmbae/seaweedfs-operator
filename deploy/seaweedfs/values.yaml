@@ -101,18 +101,18 @@ rdma:
   enablePayloadRDMA: true
   enableNativeVolumeRDMA: true
   sidecars:
-    # Keep existing sidecars on by default. Disable both for embedded-only
-    # volume RDMA canaries once the SeaweedFS image is built with verbs support.
+    # Embedded volume RDMA keeps the data path in the SeaweedFS volume process.
+    # Keep these off unless falling back to the legacy sidecar path.
     engine:
-      enabled: true
+      enabled: false
     http:
-      enabled: true
+      enabled: false
   nativeVolume:
     enabled: true
     # Enables the in-process SeaweedFS volume server RDMA transport. Requires a
     # SeaweedFS image built with the embedded RDMA verbs implementation.
-    embedded: false
-    embeddedFallbackSocket: true
+    embedded: true
+    embeddedFallbackSocket: false
     socketPath: /tmp/rdma/volume-rdma-engine.sock
     provider: verbs
     hcaPort: 1
