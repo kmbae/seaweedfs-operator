@@ -29,6 +29,7 @@ RUN_FAILOVER="${RUN_FAILOVER:-true}"
 RUN_METRICS="${RUN_METRICS:-true}"
 ASSERT_KERNEL_READ_COUNTERS="${ASSERT_KERNEL_READ_COUNTERS:-true}"
 ASSERT_DIRECT_READ_NO_FALLBACK="${ASSERT_DIRECT_READ_NO_FALLBACK:-true}"
+ASSERT_NATIVE_RDMA_PEERS="${ASSERT_NATIVE_RDMA_PEERS:-true}"
 RUN_VOLUME_LOG_GATE="${RUN_VOLUME_LOG_GATE:-false}"
 PJDFSTEST_TESTS="${PJDFSTEST_TESTS:-tests/open/25.t tests/unlink/14.t tests/open/26.t tests/mkdir/00.t tests/rename/20.t tests/rename/24.t}"
 
@@ -98,6 +99,17 @@ fetch_worker_engine_metrics() {
 fetch_worker_control_metrics() {
   local pod=$1
   fetch_container_metrics "${NS}" "${pod}" "${WORKER_CONTAINER}" "${WORKER_CONTROL_METRICS_URL}"
+}
+
+fetch_worker_control_path() {
+  local pod=$1
+  local path=$2
+  kctl -n "${NS}" exec "${pod}" -c "${WORKER_CONTAINER}" -- sh -lc "wget -qO- 'http://127.0.0.1:18084${path}'"
+}
+
+fetch_volume_native_path() {
+  local path=$1
+  kctl -n "${SEAWEED_NS}" exec "${VOLUME_POD}" -c volume -- sh -lc "wget -qO- \"http://\${POD_IP}:8444${path}\""
 }
 
 metric_counter() {
@@ -229,6 +241,124 @@ assert_metric_unchanged() {
   log "OK: ${label} unchanged (${after})"
 }
 
+assert_volume_native_ready() {
+  local status_payload=$1
+  local endpoint_payload=$2
+  VOLUME_STATUS_PAYLOAD="${status_payload}" VOLUME_ENDPOINT_PAYLOAD="${endpoint_payload}" python3 - <<'PY'
+import json
+import os
+import sys
+
+try:
+    status = json.loads(os.environ.get("VOLUME_STATUS_PAYLOAD", "{}"))
+    endpoint = json.loads(os.environ.get("VOLUME_ENDPOINT_PAYLOAD", "{}"))
+except Exception as exc:
+    print(f"ERROR: failed to decode native RDMA endpoint JSON: {exc}", file=sys.stderr)
+    sys.exit(1)
+
+errors = []
+if not status.get("read_exporter_configured"):
+    errors.append("volume read exporter is not configured")
+if not status.get("endpoint_configured"):
+    errors.append("volume native endpoint is not configured")
+if status.get("abi_version") != 1:
+    errors.append(f"volume native ABI is {status.get('abi_version')}, want 1")
+
+if endpoint.get("abi_version") != 1:
+    errors.append(f"volume endpoint ABI is {endpoint.get('abi_version')}, want 1")
+if not endpoint.get("kernel_enabled"):
+    errors.append("volume endpoint kernel_enabled=false")
+if not endpoint.get("endpoint_ready"):
+    errors.append("volume endpoint endpoint_ready=false")
+if int(endpoint.get("qp_num") or 0) == 0:
+    errors.append("volume endpoint qp_num=0")
+if int(endpoint.get("lid") or 0) == 0:
+    errors.append("volume endpoint lid=0")
+if int(endpoint.get("link_layer") or 0) not in (1, 2):
+    errors.append(f"volume endpoint link_layer={endpoint.get('link_layer')}, want 1 or 2")
+
+if errors:
+    print("ERROR: native volume RDMA endpoint is not production-ready:", file=sys.stderr)
+    for error in errors:
+        print(f"  - {error}", file=sys.stderr)
+    print(f"status={status}", file=sys.stderr)
+    print(f"endpoint={endpoint}", file=sys.stderr)
+    sys.exit(1)
+
+print(
+    "OK: native volume RDMA endpoint ready "
+    f"device={endpoint.get('device')} lid={endpoint.get('lid')} "
+    f"qpn={endpoint.get('qp_num')} link_layer={endpoint.get('link_layer')}"
+)
+PY
+}
+
+assert_native_peer_connected() {
+  local label=$1
+  local payload=$2
+  NATIVE_PEERS_PAYLOAD="${payload}" python3 - "${label}" <<'PY'
+import json
+import os
+import sys
+
+label = sys.argv[1]
+try:
+    doc = json.loads(os.environ.get("NATIVE_PEERS_PAYLOAD", "{}"))
+except Exception as exc:
+    print(f"ERROR: {label} native peer JSON decode failed: {exc}", file=sys.stderr)
+    sys.exit(1)
+
+peers = doc.get("peers") or []
+if not peers:
+    print(f"ERROR: {label} has no cached native volume RDMA peers", file=sys.stderr)
+    print(f"payload={doc}", file=sys.stderr)
+    sys.exit(1)
+
+ready = []
+errors = []
+for peer in peers:
+    local = peer.get("local") or {}
+    peer_errors = []
+    if int(peer.get("volume_connection_id") or 0) == 0:
+        peer_errors.append("volume_connection_id=0")
+    if peer.get("error"):
+        peer_errors.append(f"snapshot error={peer.get('error')}")
+    if not peer.get("ready"):
+        peer_errors.append("ready=false")
+    if not peer.get("connected"):
+        peer_errors.append("connected=false")
+    if not local.get("kernel_enabled"):
+        peer_errors.append("local.kernel_enabled=false")
+    if not local.get("endpoint_ready"):
+        peer_errors.append("local.endpoint_ready=false")
+    if not local.get("qp_connected"):
+        peer_errors.append("local.qp_connected=false")
+    if int(local.get("qp_num") or 0) == 0:
+        peer_errors.append("local.qp_num=0")
+    if int(local.get("lid") or 0) == 0:
+        peer_errors.append("local.lid=0")
+    if int(local.get("link_layer") or 0) not in (1, 2):
+        peer_errors.append(f"local.link_layer={local.get('link_layer')}")
+    if peer_errors:
+        errors.append({"peer": peer, "errors": peer_errors})
+    else:
+        ready.append(peer)
+
+if not ready:
+    print(f"ERROR: {label} has no connected native volume RDMA peer", file=sys.stderr)
+    print(json.dumps(errors, indent=2, sort_keys=True), file=sys.stderr)
+    sys.exit(1)
+
+peer = ready[0]
+local = peer.get("local") or {}
+print(
+    f"OK: {label} native volume RDMA peer connected "
+    f"volume_connection_id={peer.get('volume_connection_id')} "
+    f"device={local.get('device')} lid={local.get('lid')} qpn={local.get('qp_num')}"
+)
+PY
+}
+
 log "Resolving pods"
 read -r -a reader_nodes <<<"${READER_NODES}"
 writer_client="$(client_pod "${WRITER_NODE}")"
@@ -251,6 +381,13 @@ done
 for pod in "${reader_workers[@]}"; do
   assert_worker_mount "${pod}"
 done
+
+if [ "${ASSERT_NATIVE_RDMA_PEERS}" = "true" ]; then
+  log "Checking native volume RDMA endpoint readiness"
+  volume_native_status="$(fetch_volume_native_path /rdma/native/status)"
+  volume_native_endpoint="$(fetch_volume_native_path /rdma/native/local)"
+  assert_volume_native_ready "${volume_native_status}" "${volume_native_endpoint}"
+fi
 
 since_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 test_dir="${CLIENT_MOUNT}/rdma-prod-gate-$(date +%Y%m%d-%H%M%S)"
@@ -383,6 +520,12 @@ if [ "${RUN_METRICS}" = "true" ]; then
   assert_metric_unchanged "${writer_worker}/${WORKER_CONTAINER} native volume write peer errors" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_peer_connect_errors
   assert_metric_unchanged "${reader_workers[0]}/${WORKER_CONTAINER} native volume read errors" "${reader_metrics_before}" "${reader_metrics_after}" volume_native_rdma_read_desc_errors
   assert_metric_unchanged "${reader_workers[0]}/${WORKER_CONTAINER} native volume read peer errors" "${reader_metrics_before}" "${reader_metrics_after}" volume_native_rdma_peer_connect_errors
+fi
+
+if [ "${ASSERT_NATIVE_RDMA_PEERS}" = "true" ]; then
+  log "Checking connected native volume RDMA peers"
+  assert_native_peer_connected "${writer_worker}/${WORKER_CONTAINER}" "$(fetch_worker_control_path "${writer_worker}" /rdma/native-peers)"
+  assert_native_peer_connected "${reader_workers[0]}/${WORKER_CONTAINER}" "$(fetch_worker_control_path "${reader_workers[0]}" /rdma/native-peers)"
 fi
 
 log "Checking RDMA daemon logs"
