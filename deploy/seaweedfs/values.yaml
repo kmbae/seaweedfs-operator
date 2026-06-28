@@ -1,6 +1,6 @@
 # Seaweed CR name (defaults to Helm release name)
 name: ""
-image: kmbae27/seaweedfs:rdma-pipeline-20260628-322c4c43c
+image: kmbae27/seaweedfs:rdma-pipeline-20260628-66a81b2af
 volumeServerDiskCount: 1
 hostSuffix: ""
 labels: {}
