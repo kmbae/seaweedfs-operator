@@ -207,35 +207,35 @@ microk8s kubectl -n seaweed-vfs-poc wait --for=condition=ready \
   pod -l app.kubernetes.io/name=seaweed-vfs-rdma-node-workers --timeout=5m
 ```
 
-The checked-in DaemonSet defaults to the safer TCP fallback path. The patched
-kernel module still sets read/write RDMA hint bits, but the daemon only uses
-RDMA when it is explicitly enabled and the request size is at least the
-configured threshold.
+The checked-in DaemonSet now targets the kernel-direct RDMA descriptor path. The
+kernel module loads with `kernel_rdma_direct_reads=1` and
+`kernel_rdma_direct_writes=1`, while legacy `rdma_read_hints` and
+`rdma_write_hints` default to `0` so fallback reads/writes do not silently return
+to the older hinted payload path.
 
-To run the default TCP fallback path, apply the DaemonSet as-is and recreate the
-client pods so they bind the fresh host mount:
+Apply the DaemonSet as-is and recreate the client pods so they bind the fresh
+host mount:
 
 ```sh
 microk8s kubectl -n seaweed-vfs-poc delete pod -l app.kubernetes.io/name=seaweed-vfs-client-worker --ignore-not-found
 microk8s kubectl apply -f deploy/seaweed-vfs-poc/clients-workers.yaml
 ```
 
-To opt into the current experimental RDMA path for larger requests:
+To raise the direct RDMA descriptor threshold for larger-request-only tests:
 
 ```sh
 microk8s kubectl -n seaweed-vfs-poc set env daemonset/seaweed-vfs-rdma-node-workers \
-  ENABLE_READ_RDMA=true \
-  ENABLE_WRITE_RDMA=true \
-  ENABLE_PAYLOAD_RDMA=true \
   RDMA_READ_MIN_SIZE=8388608 \
-  RDMA_WRITE_MIN_SIZE=8388608
+  RDMA_WRITE_MIN_SIZE=8388608 \
+  KERNEL_RDMA_DIRECT_READ_MIN_BYTES=8388608 \
+  KERNEL_RDMA_DIRECT_WRITE_MIN_BYTES=8388608
 microk8s kubectl -n seaweed-vfs-poc rollout status daemonset/seaweed-vfs-rdma-node-workers --timeout=5m
 microk8s kubectl -n seaweed-vfs-poc delete pod -l app.kubernetes.io/name=seaweed-vfs-client-worker --ignore-not-found
 microk8s kubectl apply -f deploy/seaweed-vfs-poc/clients-workers.yaml
 ```
 
 Set the min-size values to `0` only for focused RDMA correctness tests where
-every hinted request should be forced through the RDMA backend.
+every direct descriptor request should be forced through the RDMA backend.
 
 ### RDMA Daemon Result
 
@@ -266,8 +266,8 @@ I/O over real RDMA without the old `sw-kd` HTTP proxy layer.
 Validated again on 2026-06-26 with the patched `seaweedvfs` module and the
 `swvfs-rdma-daemon` image `kmbae27/rdma-sidecar:swvfs-20260626-8bc56bb9d`:
 
-- hnode1, hnode2, and hnode3 load `seaweedvfs` with
-  `rdma_read_hints=Y` and `rdma_write_hints=Y`.
+- hnode1, hnode2, and hnode3 loaded `seaweedvfs` with
+  `rdma_read_hints=Y` and `rdma_write_hints=Y` in this historical run.
 - The RDMA correctness run temporarily started `swvfs-rdma-daemon` with
   `force_rdma=false`, `read_rdma=true`, `write_rdma=true`, and
   `payload_rdma=true`.
@@ -278,9 +278,9 @@ Validated again on 2026-06-26 with the patched `seaweedvfs` module and the
   `Function not implemented`.
 - The daemon also handles `RENAME`, `SYMLINK`/`READLINK`, and `MKNOD`, reducing
   the remaining gap from a basic POSIX mount surface.
-- The checked-in DaemonSet starts with `read_rdma=false`, `write_rdma=false`,
-  and `payload_rdma=false`; RDMA remains available through the opt-in
-  environment variables above.
+- At that point the checked-in DaemonSet started with `read_rdma=false`,
+  `write_rdma=false`, and `payload_rdma=false`; newer manifests use explicit
+  kernel-direct descriptor gates instead of legacy hint defaults.
 - hnode1 write and hnode2 read fio runs both logged `real_rdma=true` with
   `data_source=remote-rdma-write` or `data_source=remote-rdma`; the volume-side
   RDMA engine logged matching RDMA GET/PUT completions.
@@ -298,9 +298,10 @@ Validated again on 2026-06-26 with RDMA engine image
   and `data_source=remote-rdma`, `real_rdma=true`.
 - r7615 volume RDMA engine stayed at restart count 0 and logged successful RDMA
   PUT completions for both worker readers.
-- After the correctness run, the live POC DaemonSet was returned to the checked-in
-  safer defaults: `read_rdma=false`, `write_rdma=false`, `payload_rdma=false`,
-  `RDMA_READ_MIN_SIZE=8388608`, and `RDMA_WRITE_MIN_SIZE=8388608`.
+- After the correctness run, the live POC DaemonSet was returned to the then
+  checked-in safer defaults: `read_rdma=false`, `write_rdma=false`,
+  `payload_rdma=false`, `RDMA_READ_MIN_SIZE=8388608`, and
+  `RDMA_WRITE_MIN_SIZE=8388608`.
 
 Validated on 2026-06-26 with `swvfs-rdma-daemon` image
 `kmbae27/rdma-sidecar:swvfs-20260626-0037bc15` and the patched
@@ -573,13 +574,14 @@ The current final POC shape is:
 
 1. Keep `seaweedvfs` as the long-term mount base so Linux owns VFS caching,
    dentries, inodes, and page cache behavior.
-2. Keep SeaweedFS networking in the userspace daemon, not in the kernel module.
-3. Keep TCP/HTTP fallback available until the full fio, `pjdfstest`, and
-   failover matrix passes at production sizes.
-4. Treat RDMA as an opt-in large-I/O backend with `RDMA_READ_MIN_SIZE` and
-   `RDMA_WRITE_MIN_SIZE` thresholds while the data-plane overhead is reduced.
-5. Make the next RDMA work about protocol shape: persistent sessions,
-   batched/streamed transfers, fewer per-chunk handshakes, registered
+2. Move file payload data through explicit kernel-direct RDMA descriptor opcodes,
+   not sidecar HTTP proxy calls or legacy hint fallback.
+3. Keep TCP fallback available until the full fio, `pjdfstest`, and failover
+   matrix passes at production sizes.
+4. Treat RDMA as a descriptor-gated backend with matching kernel and daemon
+   `*_MIN_SIZE` thresholds while the data-plane overhead is reduced.
+5. Make the next RDMA work about protocol shape: volume-server-native write
+   descriptors, persistent sessions, fewer per-chunk handshakes, registered
    daemon/engine buffers, and a cleaner zero-copy-ish daemon protocol.
 
 ## Cleanup

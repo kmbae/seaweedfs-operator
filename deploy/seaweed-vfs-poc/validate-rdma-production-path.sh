@@ -59,11 +59,13 @@ print_kernel_counters() {
       kernel_rdma_read_release_posts kernel_rdma_read_release_completions \
       kernel_rdma_read_release_failures kernel_write_ops kernel_write_bytes \
       kernel_write_total_ns kernel_write_daemon_submit_ns \
-	      kernel_write_copy_from_iter_bytes kernel_write_rdma_ops \
-	      kernel_write_rdma_prepare_ns kernel_write_rdma_wr_ns \
-	      kernel_write_rdma_commit_ns kernel_write_rdma_bounce_copy_bytes \
-	      kernel_write_rdma_direct_iter_bytes kernel_write_rdma_fallbacks \
-	      kernel_rdma_remote_write_posts \
+      kernel_write_copy_from_iter_bytes kernel_write_rdma_ops \
+      kernel_rdma_direct_write_ops kernel_rdma_direct_write_bytes \
+      kernel_rdma_direct_write_fallbacks kernel_rdma_direct_write_errors \
+      kernel_write_rdma_prepare_ns kernel_write_rdma_wr_ns \
+      kernel_write_rdma_commit_ns kernel_write_rdma_bounce_copy_bytes \
+      kernel_write_rdma_direct_iter_bytes kernel_write_rdma_fallbacks \
+      kernel_rdma_remote_write_posts \
       kernel_rdma_remote_write_completions kernel_rdma_remote_write_failures \
       kernel_rdma_remote_write_bytes; do
         f="/sys/module/seaweedvfs/parameters/${p}"
@@ -249,11 +251,17 @@ main() {
   print_kernel_counters "$src"
   print_kernel_counters "$dst"
   local src_write_ops_before src_write_completions_before
+  local src_direct_write_ops_before src_direct_write_bytes_before
+  local src_direct_write_fallbacks_before src_direct_write_errors_before
   local src_write_direct_before src_write_bounce_before
   local dst_read_desc_before dst_read_completions_before
   local dst_read_direct_before dst_read_bounce_before
   src_write_ops_before="$(counter_value "$src" kernel_write_rdma_ops)"
   src_write_completions_before="$(counter_value "$src" kernel_rdma_remote_write_completions)"
+  src_direct_write_ops_before="$(counter_value "$src" kernel_rdma_direct_write_ops)"
+  src_direct_write_bytes_before="$(counter_value "$src" kernel_rdma_direct_write_bytes)"
+  src_direct_write_fallbacks_before="$(counter_value "$src" kernel_rdma_direct_write_fallbacks)"
+  src_direct_write_errors_before="$(counter_value "$src" kernel_rdma_direct_write_errors)"
   src_write_direct_before="$(counter_value "$src" kernel_write_rdma_direct_iter_bytes)"
   src_write_bounce_before="$(counter_value "$src" kernel_write_rdma_bounce_copy_bytes)"
   dst_read_desc_before="$(counter_value "$dst" kernel_read_rdma_desc_ops)"
@@ -265,6 +273,10 @@ main() {
   run_optional_pjdfstest "$dst"
   assert_counter_increased "kernel_write_rdma_ops on writer" "$src_write_ops_before" "$(counter_value "$src" kernel_write_rdma_ops)"
   assert_counter_increased "kernel_rdma_remote_write_completions on writer" "$src_write_completions_before" "$(counter_value "$src" kernel_rdma_remote_write_completions)"
+  assert_counter_increased "kernel_rdma_direct_write_ops on writer" "$src_direct_write_ops_before" "$(counter_value "$src" kernel_rdma_direct_write_ops)"
+  assert_counter_increased "kernel_rdma_direct_write_bytes on writer" "$src_direct_write_bytes_before" "$(counter_value "$src" kernel_rdma_direct_write_bytes)"
+  assert_counter_unchanged "kernel_rdma_direct_write_fallbacks on writer" "$src_direct_write_fallbacks_before" "$(counter_value "$src" kernel_rdma_direct_write_fallbacks)"
+  assert_counter_unchanged "kernel_rdma_direct_write_errors on writer" "$src_direct_write_errors_before" "$(counter_value "$src" kernel_rdma_direct_write_errors)"
   assert_counter_increased "kernel_write_rdma_direct_iter_bytes on writer" "$src_write_direct_before" "$(counter_value "$src" kernel_write_rdma_direct_iter_bytes)"
   assert_counter_unchanged "kernel_write_rdma_bounce_copy_bytes on writer" "$src_write_bounce_before" "$(counter_value "$src" kernel_write_rdma_bounce_copy_bytes)"
   assert_counter_increased "kernel_read_rdma_desc_ops on reader" "$dst_read_desc_before" "$(counter_value "$dst" kernel_read_rdma_desc_ops)"

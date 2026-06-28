@@ -60,7 +60,7 @@ spec:
         - operator: Exists
       containers:
         - name: swvfs-rdma-daemon
-          image: kmbae27/rdma-sidecar:swvfs-20260627-direct-8bd8415fc
+          image: kmbae27/rdma-sidecar:swvfs-20260628-380641d73
           imagePullPolicy: Always
           securityContext:
             privileged: true
@@ -102,11 +102,16 @@ spec:
               fi
               if lsmod | grep -q '^seaweedvfs '; then
                 fresh_module=true
-                for param in rdma_read_window_ios kernel_rdma_direct_reads kernel_rdma_direct_read_min_bytes kernel_rdma_direct_read_ops kernel_rdma_direct_read_bytes kernel_rdma_direct_read_fallbacks kernel_rdma_direct_read_errors kernel_read_rdma_folio_direct_ops kernel_read_rdma_folio_direct_bytes kernel_write_rdma_direct_iter_bytes kernel_write_rdma_bounce_copy_bytes; do
+                for param in rdma_read_window_ios kernel_rdma_direct_reads kernel_rdma_direct_read_min_bytes kernel_rdma_direct_read_ops kernel_rdma_direct_read_bytes kernel_rdma_direct_read_fallbacks kernel_rdma_direct_read_errors kernel_rdma_direct_writes kernel_rdma_direct_write_min_bytes kernel_rdma_direct_write_ops kernel_rdma_direct_write_bytes kernel_rdma_direct_write_fallbacks kernel_rdma_direct_write_errors kernel_read_rdma_folio_direct_ops kernel_read_rdma_folio_direct_bytes kernel_write_rdma_direct_iter_bytes kernel_write_rdma_bounce_copy_bytes; do
                   [ -e "/sys/module/seaweedvfs/parameters/${param}" ] || fresh_module=false
                 done
                 direct_reads="$(cat /sys/module/seaweedvfs/parameters/kernel_rdma_direct_reads 2>/dev/null || true)"
+                direct_writes="$(cat /sys/module/seaweedvfs/parameters/kernel_rdma_direct_writes 2>/dev/null || true)"
                 case "${direct_reads}" in
+                  Y|y|1|true|TRUE) ;;
+                  *) fresh_module=false ;;
+                esac
+                case "${direct_writes}" in
                   Y|y|1|true|TRUE) ;;
                   *) fresh_module=false ;;
                 esac
@@ -120,9 +125,9 @@ spec:
                 fi
               fi
               if ! lsmod | grep -q '^seaweedvfs '; then
-                modprobe seaweedvfs kernel_rdma=1 kernel_rdma_direct_reads="${KERNEL_RDMA_DIRECT_READS:-1}" kernel_rdma_direct_read_min_bytes="${KERNEL_RDMA_DIRECT_READ_MIN_BYTES:-262144}" rdma_read_hints=1 rdma_write_hints=1 rdma_read_window_ios="${RDMA_READ_WINDOW_IOS:-4}"
+                modprobe seaweedvfs kernel_rdma=1 kernel_rdma_direct_reads="${KERNEL_RDMA_DIRECT_READS:-1}" kernel_rdma_direct_read_min_bytes="${KERNEL_RDMA_DIRECT_READ_MIN_BYTES:-262144}" kernel_rdma_direct_writes="${KERNEL_RDMA_DIRECT_WRITES:-1}" kernel_rdma_direct_write_min_bytes="${KERNEL_RDMA_DIRECT_WRITE_MIN_BYTES:-262144}" rdma_read_hints="${RDMA_READ_HINTS:-0}" rdma_write_hints="${RDMA_WRITE_HINTS:-0}" rdma_read_window_ios="${RDMA_READ_WINDOW_IOS:-4}"
               fi
-              for param in kernel_rdma kernel_rdma_direct_reads rdma_read_hints rdma_write_hints; do
+              for param in kernel_rdma kernel_rdma_direct_reads kernel_rdma_direct_writes; do
                 value="$(cat "/sys/module/seaweedvfs/parameters/${param}" 2>/dev/null || true)"
                 case "${value}" in
                   Y|y|1|true|TRUE)
@@ -134,7 +139,7 @@ spec:
                     ;;
                   esac
               done
-              for param in rdma_read_window_ios kernel_rdma_direct_read_min_bytes kernel_rdma_direct_read_ops kernel_rdma_direct_read_bytes kernel_rdma_direct_read_fallbacks kernel_rdma_direct_read_errors kernel_read_rdma_folio_direct_ops kernel_read_rdma_folio_direct_bytes kernel_write_rdma_direct_iter_bytes kernel_write_rdma_bounce_copy_bytes; do
+              for param in rdma_read_window_ios kernel_rdma_direct_read_min_bytes kernel_rdma_direct_read_ops kernel_rdma_direct_read_bytes kernel_rdma_direct_read_fallbacks kernel_rdma_direct_read_errors kernel_rdma_direct_write_min_bytes kernel_rdma_direct_write_ops kernel_rdma_direct_write_bytes kernel_rdma_direct_write_fallbacks kernel_rdma_direct_write_errors kernel_read_rdma_folio_direct_ops kernel_read_rdma_folio_direct_bytes kernel_write_rdma_direct_iter_bytes kernel_write_rdma_bounce_copy_bytes; do
                 [ -e "/sys/module/seaweedvfs/parameters/${param}" ] || {
                   echo "ERROR: seaweedvfs parameter ${param} is missing; stale kernel module is loaded" >&2
                   exit 1
@@ -157,8 +162,8 @@ spec:
                 --enable-read-rdma="${ENABLE_READ_RDMA:-false}" \
                 --enable-write-rdma="${ENABLE_WRITE_RDMA:-false}" \
                 --enable-payload-rdma="${ENABLE_PAYLOAD_RDMA:-false}" \
-                --rdma-read-min-size="${RDMA_READ_MIN_SIZE:-8388608}" \
-                --rdma-write-min-size="${RDMA_WRITE_MIN_SIZE:-8388608}" \
+                --rdma-read-min-size="${RDMA_READ_MIN_SIZE:-262144}" \
+                --rdma-write-min-size="${RDMA_WRITE_MIN_SIZE:-262144}" \
                 --rdma-control-listen="${RDMA_CONTROL_LISTEN:-:18084}" \
                 --rdma-peer-endpoints="${RDMA_PEER_ENDPOINTS:-http://seaweed-vfs-rdma-peer.seaweed-vfs-poc.svc.cluster.local:18084}" \
                 --rdma-peer-min-count="${RDMA_PEER_MIN_COUNT:-3}" \
@@ -204,13 +209,21 @@ spec:
             - name: RDMA_READ_MIN_SIZE
               value: "262144"
             - name: RDMA_WRITE_MIN_SIZE
-              value: "1048576"
+              value: "262144"
             - name: RDMA_READ_WINDOW_IOS
               value: "4"
             - name: KERNEL_RDMA_DIRECT_READS
               value: "1"
             - name: KERNEL_RDMA_DIRECT_READ_MIN_BYTES
               value: "262144"
+            - name: KERNEL_RDMA_DIRECT_WRITES
+              value: "1"
+            - name: KERNEL_RDMA_DIRECT_WRITE_MIN_BYTES
+              value: "262144"
+            - name: RDMA_READ_HINTS
+              value: "0"
+            - name: RDMA_WRITE_HINTS
+              value: "0"
             - name: RDMA_CONTROL_LISTEN
               value: :18084
             - name: RDMA_PEER_ENDPOINTS
