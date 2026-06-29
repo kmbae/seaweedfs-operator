@@ -34,6 +34,9 @@ ASSERT_DIRECT_READ_NO_FALLBACK="${ASSERT_DIRECT_READ_NO_FALLBACK:-true}"
 ASSERT_NATIVE_RDMA_PEERS="${ASSERT_NATIVE_RDMA_PEERS:-true}"
 ASSERT_KERNEL_RDMA_PIPELINED_WRS="${ASSERT_KERNEL_RDMA_PIPELINED_WRS:-false}"
 RUN_VOLUME_LOG_GATE="${RUN_VOLUME_LOG_GATE:-false}"
+RUN_LOCAL_RDMA_GATE="${RUN_LOCAL_RDMA_GATE:-true}"
+LOCAL_RDMA_GATE_REQUIRE_CONNECTED="${LOCAL_RDMA_GATE_REQUIRE_CONNECTED:-false}"
+LOCAL_RDMA_GATE_REQUIRE_PAGECACHE_WRITEBACK="${LOCAL_RDMA_GATE_REQUIRE_PAGECACHE_WRITEBACK:-false}"
 PJDFSTEST_TESTS="${PJDFSTEST_TESTS:-tests/open/25.t tests/unlink/14.t tests/open/26.t tests/mkdir/00.t tests/rename/20.t tests/rename/24.t}"
 
 if command -v kubectl >/dev/null 2>&1; then
@@ -52,6 +55,13 @@ is_truthy() {
   case "${1:-}" in
     Y|y|1|true|TRUE|yes|YES) return 0 ;;
     *) return 1 ;;
+  esac
+}
+
+is_uint() {
+  case "${1:-}" in
+    ''|*[!0-9]*) return 1 ;;
+    *) return 0 ;;
   esac
 }
 
@@ -198,6 +208,140 @@ worker_counter() {
   local pod=$1
   local name=$2
   exec_worker "${pod}" "cat '/sys/module/seaweedvfs/parameters/${name}' 2>/dev/null || printf 0"
+}
+
+require_worker_param_exists() {
+  local pod=$1
+  local name=$2
+  exec_worker "${pod}" "test -e '/sys/module/seaweedvfs/parameters/${name}'" \
+    || die "missing seaweedvfs module parameter/counter on ${pod}: ${name}"
+}
+
+require_worker_truthy_param() {
+  local pod=$1
+  local name=$2
+  local value
+  require_worker_param_exists "${pod}" "${name}"
+  value="$(worker_counter "${pod}" "${name}")"
+  is_truthy "${value}" || die "${name} is not enabled on ${pod}: ${value}"
+  log "OK: ${pod} ${name}=${value}"
+}
+
+require_worker_uint_counter() {
+  local pod=$1
+  local name=$2
+  local value
+  require_worker_param_exists "${pod}" "${name}"
+  value="$(worker_counter "${pod}" "${name}")"
+  is_uint "${value}" || die "${name} is not a numeric counter on ${pod}: ${value}"
+  log "OK: ${pod} ${name}=${value}"
+}
+
+endpoint_env_value() {
+  local payload=$1
+  local name=$2
+  awk -F= -v key="${name}" '$1 == key { print $2; found = 1; exit } END { if (!found) exit 1 }' <<<"${payload}"
+}
+
+assert_worker_endpoint_env() {
+  local pod=$1
+  local endpoint_env=$2
+  local abi
+  local qpn
+  local psn
+  local flags
+  local link_layer
+  local lid
+  local gid
+  local port_state
+
+  abi="$(endpoint_env_value "${endpoint_env}" SWVFS_ABI_VERSION || true)"
+  qpn="$(endpoint_env_value "${endpoint_env}" SWVFS_QP_NUM || true)"
+  psn="$(endpoint_env_value "${endpoint_env}" SWVFS_PSN || true)"
+  flags="$(endpoint_env_value "${endpoint_env}" SWVFS_FLAGS || true)"
+  link_layer="$(endpoint_env_value "${endpoint_env}" SWVFS_LINK_LAYER || true)"
+  lid="$(endpoint_env_value "${endpoint_env}" SWVFS_LID || true)"
+  gid="$(endpoint_env_value "${endpoint_env}" SWVFS_GID || true)"
+  port_state="$(endpoint_env_value "${endpoint_env}" SWVFS_PORT_STATE || true)"
+
+  [ "${abi}" = "1" ] || die "unexpected seaweedvfs RDMA ABI on ${pod}: ${abi:-unset}"
+  is_uint "${qpn}" && [ "${qpn}" -ne 0 ] || die "RDMA QP is not allocated on ${pod}: ${qpn:-unset}"
+  is_uint "${psn}" && [ "${psn}" -ne 0 ] || die "RDMA PSN is not allocated on ${pod}: ${psn:-unset}"
+  is_uint "${flags}" || die "RDMA endpoint flags are not numeric on ${pod}: ${flags:-unset}"
+
+  case "${link_layer}" in
+    1)
+      is_uint "${lid}" && [ "${lid}" -ne 0 ] || die "InfiniBand endpoint has no LID on ${pod}: ${lid:-unset}"
+      ;;
+    2)
+      [ -n "${gid}" ] || die "RoCE endpoint has no GID on ${pod}"
+      ;;
+    *)
+      log "WARN: ${pod} unknown RDMA link layer: ${link_layer:-unset}"
+      ;;
+  esac
+
+  if [ "${port_state}" != "4" ]; then
+    log "WARN: ${pod} RDMA port state is ${port_state:-unset}, expected 4 (ACTIVE)"
+  fi
+
+  if is_truthy "${LOCAL_RDMA_GATE_REQUIRE_CONNECTED}" && [ $((flags & 8)) -ne 8 ]; then
+    die "RDMA QP is not connected on ${pod}; endpoint flags=${flags}"
+  fi
+
+  log "OK: ${pod} RDMA ABI=${abi} qpn=${qpn} psn=${psn} flags=${flags}"
+}
+
+run_worker_local_rdma_gate() {
+  local pod=$1
+  local endpoint_env
+  local counter
+  local script_env
+
+  is_truthy "${RUN_LOCAL_RDMA_GATE}" || return 0
+
+  log "Checking local SeaweedFS-over-RDMA gate on ${pod}"
+  script_env="REQUIRE_CONNECTED='${LOCAL_RDMA_GATE_REQUIRE_CONNECTED}' REQUIRE_PAGECACHE_WRITEBACK='${LOCAL_RDMA_GATE_REQUIRE_PAGECACHE_WRITEBACK}'"
+  if exec_worker "${pod}" "test -x /app/swvfs-rdma-local-gate.sh"; then
+    exec_worker "${pod}" "${script_env} /app/swvfs-rdma-local-gate.sh"
+    return 0
+  fi
+  if exec_worker "${pod}" "command -v swvfs-rdma-local-gate.sh >/dev/null 2>&1"; then
+    exec_worker "${pod}" "${script_env} swvfs-rdma-local-gate.sh"
+    return 0
+  fi
+
+  exec_worker "${pod}" "test -e /dev/seaweedvfs" || die "/dev/seaweedvfs is missing on ${pod}"
+  exec_worker "${pod}" "test -d /sys/module/seaweedvfs/parameters" || die "seaweedvfs sysfs is missing on ${pod}"
+  require_worker_truthy_param "${pod}" kernel_rdma
+  require_worker_truthy_param "${pod}" kernel_rdma_direct_reads
+  require_worker_truthy_param "${pod}" kernel_rdma_direct_writes
+  if is_truthy "${LOCAL_RDMA_GATE_REQUIRE_PAGECACHE_WRITEBACK}"; then
+    require_worker_truthy_param "${pod}" kernel_rdma_pagecache_writeback
+  fi
+
+  for counter in \
+    kernel_rdma_remote_read_posts \
+    kernel_rdma_remote_read_completions \
+    kernel_rdma_remote_read_failures \
+    kernel_rdma_remote_write_posts \
+    kernel_rdma_remote_write_completions \
+    kernel_rdma_remote_write_failures \
+    kernel_rdma_direct_read_ops \
+    kernel_read_rdma_folio_direct_bytes \
+    kernel_rdma_direct_write_ops \
+    kernel_rdma_direct_write_bytes \
+    kernel_rdma_read_fallbacks \
+    kernel_write_rdma_fallbacks; do
+    require_worker_uint_counter "${pod}" "${counter}"
+  done
+
+  if exec_worker "${pod}" "command -v swvfs-rdma-ctl >/dev/null 2>&1"; then
+    endpoint_env="$(exec_worker "${pod}" "swvfs-rdma-ctl info-env")"
+    assert_worker_endpoint_env "${pod}" "${endpoint_env}"
+  else
+    log "WARN: swvfs-rdma-ctl is missing on ${pod}; skipped endpoint ioctl ABI check"
+  fi
 }
 
 assert_counter_increased() {
@@ -417,6 +561,11 @@ for pod in "${reader_clients[@]}"; do
 done
 for pod in "${reader_workers[@]}"; do
   assert_worker_mount "${pod}"
+done
+
+run_worker_local_rdma_gate "${writer_worker}"
+for pod in "${reader_workers[@]}"; do
+  run_worker_local_rdma_gate "${pod}"
 done
 
 if [ "${ASSERT_NATIVE_RDMA_PEERS}" = "true" ]; then
