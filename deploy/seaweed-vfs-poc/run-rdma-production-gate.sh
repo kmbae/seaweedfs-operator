@@ -103,7 +103,24 @@ fetch_container_metrics() {
   local pod=$2
   local container=$3
   local url=$4
-  kctl -n "${namespace}" exec "${pod}" -c "${container}" -- sh -lc "curl -fsS '${url}'"
+  http_get_container "${namespace}" "${pod}" "${container}" "${url}"
+}
+
+http_get_container() {
+  local namespace=$1
+  local pod=$2
+  local container=$3
+  local url=$4
+  kctl -n "${namespace}" exec "${pod}" -c "${container}" -- sh -lc "
+    if command -v curl >/dev/null 2>&1; then
+      curl -fsS '${url}'
+    elif command -v wget >/dev/null 2>&1; then
+      wget -qO- '${url}'
+    else
+      echo 'ERROR: neither curl nor wget is available for HTTP GET' >&2
+      exit 127
+    fi
+  "
 }
 
 fetch_volume_engine_metrics() {
@@ -123,12 +140,15 @@ fetch_worker_control_metrics() {
 fetch_worker_control_path() {
   local pod=$1
   local path=$2
-  kctl -n "${NS}" exec "${pod}" -c "${WORKER_CONTAINER}" -- sh -lc "wget -qO- 'http://127.0.0.1:18084${path}'"
+  http_get_container "${NS}" "${pod}" "${WORKER_CONTAINER}" "http://127.0.0.1:18084${path}"
 }
 
 fetch_volume_native_path() {
   local path=$1
-  kctl -n "${SEAWEED_NS}" exec "${VOLUME_POD}" -c volume -- sh -lc "wget -qO- \"http://\${POD_IP}:8444${path}\""
+  local pod_ip
+  pod_ip="$(kctl -n "${SEAWEED_NS}" get pod "${VOLUME_POD}" -o jsonpath='{.status.podIP}')"
+  [ -n "${pod_ip}" ] || die "failed to resolve pod IP for ${SEAWEED_NS}/${VOLUME_POD}"
+  http_get_container "${SEAWEED_NS}" "${VOLUME_POD}" volume "http://${pod_ip}:8444${path}"
 }
 
 metric_counter() {
@@ -392,7 +412,7 @@ run_worker_local_rdma_gate() {
   fi
   assert_worker_local_endpoint_ready "${pod}/${WORKER_CONTAINER}" "${endpoint_payload}"
 
-  if exec_worker "${pod}" "command -v swvfs-rdma-ctl >/dev/null 2>&1"; then
+  if exec_worker "${pod}" "command -v swvfs-rdma-ctl >/dev/null 2>&1" >/dev/null 2>&1; then
     if endpoint_env="$(exec_worker "${pod}" "swvfs-rdma-ctl info-env")"; then
       assert_worker_endpoint_env "${pod}" "${endpoint_env}"
     else
