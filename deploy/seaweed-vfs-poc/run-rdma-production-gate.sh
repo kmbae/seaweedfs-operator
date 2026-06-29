@@ -33,6 +33,8 @@ ASSERT_KERNEL_READ_COUNTERS="${ASSERT_KERNEL_READ_COUNTERS:-true}"
 ASSERT_DIRECT_READ_NO_FALLBACK="${ASSERT_DIRECT_READ_NO_FALLBACK:-true}"
 ASSERT_NATIVE_RDMA_PEERS="${ASSERT_NATIVE_RDMA_PEERS:-true}"
 ASSERT_KERNEL_RDMA_PIPELINED_WRS="${ASSERT_KERNEL_RDMA_PIPELINED_WRS:-false}"
+ASSERT_KERNEL_WRITE_PIPELINED_WRS="${ASSERT_KERNEL_WRITE_PIPELINED_WRS:-${ASSERT_KERNEL_RDMA_PIPELINED_WRS}}"
+ASSERT_KERNEL_READ_PIPELINED_WRS="${ASSERT_KERNEL_READ_PIPELINED_WRS:-false}"
 RUN_VOLUME_LOG_GATE="${RUN_VOLUME_LOG_GATE:-false}"
 RUN_LOCAL_RDMA_GATE="${RUN_LOCAL_RDMA_GATE:-true}"
 LOCAL_RDMA_GATE_REQUIRE_CONNECTED="${LOCAL_RDMA_GATE_REQUIRE_CONNECTED:-false}"
@@ -775,7 +777,7 @@ assert_counter_unchanged "kernel_rdma_direct_write_errors on ${writer_worker}" "
 assert_counter_increased "kernel_rdma_send_batches on ${writer_worker}" "${writer_send_batches_before}" "$(worker_counter "${writer_worker}" kernel_rdma_send_batches)"
 assert_counter_increased "kernel_rdma_send_batch_wrs on ${writer_worker}" "${writer_send_batch_wrs_before}" "$(worker_counter "${writer_worker}" kernel_rdma_send_batch_wrs)"
 writer_max_batch_wrs="$(worker_counter "${writer_worker}" kernel_rdma_send_max_batch_wrs)"
-if [ "${ASSERT_KERNEL_RDMA_PIPELINED_WRS}" = "true" ] && [ "${writer_max_batch_wrs}" -le 1 ]; then
+if [ "${ASSERT_KERNEL_WRITE_PIPELINED_WRS}" = "true" ] && [ "${writer_max_batch_wrs}" -le 1 ]; then
   die "kernel_rdma_send_max_batch_wrs on ${writer_worker} did not prove pipelined WR posting: ${writer_max_batch_wrs}"
 fi
 log "kernel_rdma_send_max_batch_wrs on ${writer_worker}=${writer_max_batch_wrs}"
@@ -791,7 +793,7 @@ if is_truthy "${writer_pagecache_writeback}"; then
   writer_pagecache_writeback_batch_ops_after="$(worker_counter "${writer_worker}" kernel_write_rdma_pagecache_writeback_batch_ops)"
   writer_pagecache_writeback_batch_entries_after="$(worker_counter "${writer_worker}" kernel_write_rdma_pagecache_writeback_batch_entries)"
   writer_pagecache_writeback_batch_fallbacks_after="$(worker_counter "${writer_worker}" kernel_write_rdma_pagecache_writeback_batch_fallbacks)"
-  if [ "${RUN_WRITE_BATCH_PROBE}" = "true" ] && [ "${ASSERT_KERNEL_RDMA_PIPELINED_WRS}" = "true" ]; then
+  if [ "${RUN_WRITE_BATCH_PROBE}" = "true" ] && [ "${ASSERT_KERNEL_WRITE_PIPELINED_WRS}" = "true" ]; then
     assert_counter_increased "kernel_write_rdma_pagecache_writeback_batch_ops on ${writer_worker}" "${writer_pagecache_writeback_batch_ops_before}" "${writer_pagecache_writeback_batch_ops_after}"
     assert_counter_increased "kernel_write_rdma_pagecache_writeback_batch_entries on ${writer_worker}" "${writer_pagecache_writeback_batch_entries_before}" "${writer_pagecache_writeback_batch_entries_after}"
     assert_counter_unchanged "kernel_write_rdma_pagecache_writeback_batch_fallbacks on ${writer_worker}" "${writer_pagecache_writeback_batch_fallbacks_before}" "${writer_pagecache_writeback_batch_fallbacks_after}"
@@ -841,7 +843,7 @@ if [ "${ASSERT_KERNEL_READ_COUNTERS}" = "true" ]; then
   assert_counter_increased "kernel_rdma_send_batches on ${reader_workers[0]}" "${reader_send_batches_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_send_batches)"
   assert_counter_increased "kernel_rdma_send_batch_wrs on ${reader_workers[0]}" "${reader_send_batch_wrs_before}" "$(worker_counter "${reader_workers[0]}" kernel_rdma_send_batch_wrs)"
   reader_max_batch_wrs="$(worker_counter "${reader_workers[0]}" kernel_rdma_send_max_batch_wrs)"
-  if [ "${ASSERT_KERNEL_RDMA_PIPELINED_WRS}" = "true" ] && [ "${reader_max_batch_wrs}" -le 1 ]; then
+  if [ "${ASSERT_KERNEL_READ_PIPELINED_WRS}" = "true" ] && [ "${reader_max_batch_wrs}" -le 1 ]; then
     die "kernel_rdma_send_max_batch_wrs on ${reader_workers[0]} did not prove pipelined WR posting: ${reader_max_batch_wrs}"
   fi
   log "kernel_rdma_send_max_batch_wrs on ${reader_workers[0]}=${reader_max_batch_wrs}"
