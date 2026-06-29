@@ -337,7 +337,9 @@ run_worker_local_rdma_gate() {
   done
 
   if exec_worker "${pod}" "command -v swvfs-rdma-ctl >/dev/null 2>&1"; then
-    endpoint_env="$(exec_worker "${pod}" "swvfs-rdma-ctl info-env")"
+    if ! endpoint_env="$(exec_worker "${pod}" "swvfs-rdma-ctl info-env")"; then
+      die "swvfs-rdma-ctl on ${pod} does not support info-env; update the worker image with ABI v1 tools"
+    fi
     assert_worker_endpoint_env "${pod}" "${endpoint_env}"
   else
     log "WARN: swvfs-rdma-ctl is missing on ${pod}; skipped endpoint ioctl ABI check"
