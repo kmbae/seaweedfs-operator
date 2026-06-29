@@ -710,9 +710,9 @@ if [ "${RUN_METRICS}" = "true" ]; then
   log "Capturing RDMA metrics baseline"
   writer_metrics_before="$(fetch_worker_control_metrics "${writer_worker}")"
   reader_metrics_before="$(fetch_worker_control_metrics "${reader_workers[0]}")"
-  fetch_volume_engine_metrics >/dev/null || true
-  fetch_worker_engine_metrics "${writer_worker}" >/dev/null || true
-  fetch_worker_engine_metrics "${reader_workers[0]}" >/dev/null || true
+  fetch_volume_engine_metrics >/dev/null 2>&1 || true
+  fetch_worker_engine_metrics "${writer_worker}" >/dev/null 2>&1 || true
+  fetch_worker_engine_metrics "${reader_workers[0]}" >/dev/null 2>&1 || true
 fi
 
 log "Smoke write on ${WRITER_NODE}: ${SMOKE_SIZE_MB}MiB"
