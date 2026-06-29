@@ -292,25 +292,76 @@ assert_worker_endpoint_env() {
   log "OK: ${pod} RDMA ABI=${abi} qpn=${qpn} psn=${psn} flags=${flags}"
 }
 
+assert_worker_local_endpoint_ready() {
+  local label=$1
+  local payload=$2
+  WORKER_LOCAL_ENDPOINT_PAYLOAD="${payload}" \
+    REQUIRE_CONNECTED="${LOCAL_RDMA_GATE_REQUIRE_CONNECTED}" \
+    python3 - "${label}" <<'PY'
+import json
+import os
+import sys
+
+label = sys.argv[1]
+try:
+    endpoint = json.loads(os.environ.get("WORKER_LOCAL_ENDPOINT_PAYLOAD", "{}"))
+except Exception as exc:
+    print(f"ERROR: {label} /rdma/local JSON decode failed: {exc}", file=sys.stderr)
+    sys.exit(1)
+
+def truthy(value):
+    return str(value).lower() in ("1", "true", "yes", "y")
+
+errors = []
+if endpoint.get("abi_version") != 1:
+    errors.append(f"abi_version={endpoint.get('abi_version')}, want 1")
+if not endpoint.get("kernel_enabled"):
+    errors.append("kernel_enabled=false")
+if not endpoint.get("endpoint_ready"):
+    errors.append("endpoint_ready=false")
+if int(endpoint.get("qp_num") or 0) == 0:
+    errors.append("qp_num=0")
+if int(endpoint.get("psn") or 0) > 0x00ffffff:
+    errors.append(f"psn={endpoint.get('psn')} exceeds 24-bit PSN")
+
+link_layer = int(endpoint.get("link_layer") or 0)
+if link_layer == 1:
+    if int(endpoint.get("lid") or 0) == 0:
+        errors.append("InfiniBand endpoint lid=0")
+elif link_layer == 2:
+    if not endpoint.get("gid"):
+        errors.append("RoCE endpoint gid is empty")
+else:
+    if int(endpoint.get("lid") or 0) == 0 and not endpoint.get("gid"):
+        errors.append(f"unknown link_layer={link_layer} with neither lid nor gid")
+
+if truthy(os.environ.get("REQUIRE_CONNECTED")) and not endpoint.get("qp_connected"):
+    errors.append("qp_connected=false")
+
+if errors:
+    print(f"ERROR: {label} local kernel RDMA endpoint is not production-ready:", file=sys.stderr)
+    for error in errors:
+        print(f"  - {error}", file=sys.stderr)
+    print(json.dumps(endpoint, indent=2, sort_keys=True), file=sys.stderr)
+    sys.exit(1)
+
+print(
+    f"OK: {label} local RDMA endpoint ready "
+    f"device={endpoint.get('device')} lid={endpoint.get('lid')} "
+    f"qpn={endpoint.get('qp_num')} connected={endpoint.get('qp_connected')}"
+)
+PY
+}
+
 run_worker_local_rdma_gate() {
   local pod=$1
   local endpoint_env
+  local endpoint_payload
   local counter
-  local script_env
 
   is_truthy "${RUN_LOCAL_RDMA_GATE}" || return 0
 
   log "Checking local SeaweedFS-over-RDMA gate on ${pod}"
-  script_env="REQUIRE_CONNECTED='${LOCAL_RDMA_GATE_REQUIRE_CONNECTED}' REQUIRE_PAGECACHE_WRITEBACK='${LOCAL_RDMA_GATE_REQUIRE_PAGECACHE_WRITEBACK}'"
-  if exec_worker "${pod}" "test -x /app/swvfs-rdma-local-gate.sh"; then
-    exec_worker "${pod}" "${script_env} /app/swvfs-rdma-local-gate.sh"
-    return 0
-  fi
-  if exec_worker "${pod}" "command -v swvfs-rdma-local-gate.sh >/dev/null 2>&1"; then
-    exec_worker "${pod}" "${script_env} swvfs-rdma-local-gate.sh"
-    return 0
-  fi
-
   exec_worker "${pod}" "test -e /dev/seaweedvfs" || die "/dev/seaweedvfs is missing on ${pod}"
   exec_worker "${pod}" "test -d /sys/module/seaweedvfs/parameters" || die "seaweedvfs sysfs is missing on ${pod}"
   require_worker_truthy_param "${pod}" kernel_rdma
@@ -336,13 +387,17 @@ run_worker_local_rdma_gate() {
     require_worker_uint_counter "${pod}" "${counter}"
   done
 
+  if ! endpoint_payload="$(fetch_worker_control_path "${pod}" /rdma/local)"; then
+    die "failed to fetch ${pod} /rdma/local; worker daemon control API is required for ABI v1 production gate"
+  fi
+  assert_worker_local_endpoint_ready "${pod}/${WORKER_CONTAINER}" "${endpoint_payload}"
+
   if exec_worker "${pod}" "command -v swvfs-rdma-ctl >/dev/null 2>&1"; then
-    if ! endpoint_env="$(exec_worker "${pod}" "swvfs-rdma-ctl info-env")"; then
-      die "swvfs-rdma-ctl on ${pod} does not support info-env; update the worker image with ABI v1 tools"
+    if endpoint_env="$(exec_worker "${pod}" "swvfs-rdma-ctl info-env")"; then
+      assert_worker_endpoint_env "${pod}" "${endpoint_env}"
+    else
+      log "WARN: swvfs-rdma-ctl on ${pod} does not support info-env; /rdma/local API already passed"
     fi
-    assert_worker_endpoint_env "${pod}" "${endpoint_env}"
-  else
-    log "WARN: swvfs-rdma-ctl is missing on ${pod}; skipped endpoint ioctl ABI check"
   fi
 }
 
