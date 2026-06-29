@@ -285,7 +285,7 @@ spec:
             - name: KERNEL_RDMA_PAGECACHE_WRITEBACK
               value: "1"
             - name: KERNEL_MODULE_SRCVERSION
-              value: BFE38021DBC9EF5610550D1
+              value: 0D1F7159BF19A7831FDA6CC
             - name: RDMA_READ_HINTS
               value: "0"
             - name: RDMA_WRITE_HINTS
