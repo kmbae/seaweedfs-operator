@@ -867,6 +867,15 @@ if [ "${RUN_METRICS}" = "true" ]; then
     assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write commit" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_success
     assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write bytes" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_bytes
     assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} handler_write_rdma_commit_requests" "${writer_metrics_before}" "${writer_metrics_after}" handler_write_rdma_commit_requests
+    if [ "${RUN_WRITE_BATCH_PROBE}" = "true" ]; then
+      assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write desc batch" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_desc_batch_success
+      assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write desc batch entries" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_desc_batch_entries
+      assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write commit batch" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_batch_success
+      assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write commit batch entries" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_batch_entry_success
+      assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write commit batch bytes" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_batch_bytes
+      assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} handler_write_rdma_prepare_batch_ops" "${writer_metrics_before}" "${writer_metrics_after}" handler_write_rdma_prepare_batch_ops
+      assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} handler_write_rdma_commit_batch_ops" "${writer_metrics_before}" "${writer_metrics_after}" handler_write_rdma_commit_batch_ops
+    fi
   else
     assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write commit batch" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_batch_success
     assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write commit batch entries" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_batch_entry_success
