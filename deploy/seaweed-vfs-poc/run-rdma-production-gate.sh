@@ -168,7 +168,12 @@ except Exception:
     print(0)
     raise SystemExit
 
-for counter in doc.get("counters", []):
+metrics = doc.get("counters", [])
+if isinstance(metrics, dict):
+    print(int(metrics.get(name, 0)))
+    raise SystemExit
+
+for counter in metrics:
     if counter.get("name") == name:
         print(int(counter.get("value", 0)))
         break
@@ -715,6 +720,7 @@ if [ "${RUN_METRICS}" = "true" ]; then
   log "Capturing RDMA metrics baseline"
   writer_metrics_before="$(fetch_worker_control_metrics "${writer_worker}")"
   reader_metrics_before="$(fetch_worker_control_metrics "${reader_workers[0]}")"
+  volume_native_status_before="$(fetch_volume_native_path /rdma/native/status)"
   fetch_volume_engine_metrics >/dev/null 2>&1 || true
   fetch_worker_engine_metrics "${writer_worker}" >/dev/null 2>&1 || true
   fetch_worker_engine_metrics "${reader_workers[0]}" >/dev/null 2>&1 || true
@@ -862,6 +868,7 @@ if [ "${RUN_METRICS}" = "true" ]; then
   log "Checking RDMA path metrics"
   writer_metrics_after="$(fetch_worker_control_metrics "${writer_worker}")"
   reader_metrics_after="$(fetch_worker_control_metrics "${reader_workers[0]}")"
+  volume_native_status_after="$(fetch_volume_native_path /rdma/native/status)"
   assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write desc" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_desc_success
   if is_truthy "${writer_pagecache_writeback}"; then
     assert_metric_increased "${writer_worker}/${WORKER_CONTAINER} native volume write commit" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_commit_success
@@ -894,6 +901,13 @@ if [ "${RUN_METRICS}" = "true" ]; then
   assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} handler_read_rdma_prepare_batch_replies" "${reader_metrics_before}" "${reader_metrics_after}" handler_read_rdma_prepare_batch_replies
   assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} handler_read_rdma_prepare_batch_descs" "${reader_metrics_before}" "${reader_metrics_after}" handler_read_rdma_prepare_batch_descs
   assert_metric_increased "${reader_workers[0]}/${WORKER_CONTAINER} handler_read_rdma_release_replies" "${reader_metrics_before}" "${reader_metrics_after}" handler_read_rdma_release_replies
+  if [ "${RUN_WRITE_BATCH_PROBE}" = "true" ]; then
+    assert_metric_increased "${VOLUME_POD}/${VOLUME_CONTAINER} write commit batch storage requests" "${volume_native_status_before}" "${volume_native_status_after}" write_commit_batch_storage_requests
+    assert_metric_increased "${VOLUME_POD}/${VOLUME_CONTAINER} write commit batch entries" "${volume_native_status_before}" "${volume_native_status_after}" write_commit_batch_entries
+    assert_metric_increased "${VOLUME_POD}/${VOLUME_CONTAINER} write commit batch bytes" "${volume_native_status_before}" "${volume_native_status_after}" write_commit_batch_bytes
+    assert_metric_unchanged "${VOLUME_POD}/${VOLUME_CONTAINER} write commit batch storage fallbacks" "${volume_native_status_before}" "${volume_native_status_after}" write_commit_batch_storage_fallbacks
+    log "INFO: ${VOLUME_POD}/${VOLUME_CONTAINER} write_commit_batch_storage_avg_ns=$(metric_counter "${volume_native_status_after}" write_commit_batch_storage_avg_ns)"
+  fi
   log_metric_average_size "${writer_worker}/${WORKER_CONTAINER} native volume write descriptors" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_desc_success volume_native_rdma_write_desc_bytes
   log_metric_average_size "${reader_workers[0]}/${WORKER_CONTAINER} native volume read descriptors" "${reader_metrics_before}" "${reader_metrics_after}" volume_native_rdma_read_desc_success volume_native_rdma_read_desc_bytes
   assert_metric_unchanged "${writer_worker}/${WORKER_CONTAINER} native volume write desc errors" "${writer_metrics_before}" "${writer_metrics_after}" volume_native_rdma_write_desc_post_errors
